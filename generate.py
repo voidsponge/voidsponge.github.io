@@ -2683,8 +2683,9 @@ Tapez <span style="color: var(--color-primary);">help</span> pour voir les comma
     </div>
 
     <script>
-        // Theme Toggle
-        (function() {{
+        document.addEventListener('DOMContentLoaded', function() {{
+            // Theme Toggle
+            (function() {{
             const themeToggle = document.getElementById('themeToggle');
             const themeIcon = document.getElementById('themeIcon');
             const html = document.documentElement;
