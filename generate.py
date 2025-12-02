@@ -784,7 +784,7 @@ def generate_index_page(articles):
                 <div class="logo">CyberInsight</div>
                 <nav>
                     <a href="#articles">Articles</a>
-                    <a href="https://github.com/YOUR-USERNAME/YOUR-REPO" target="_blank">GitHub</a>
+                    <a href="https://github.com/voidsponge" target="_blank">GitHub</a>
                 </nav>
             </div>
         </div>
@@ -796,12 +796,12 @@ def generate_index_page(articles):
                 <h1><span class="gradient-text">Décryptage de la Cybersécurité</span></h1>
                 <p>Explorez les dernières menaces, vulnérabilités et techniques de protection dans le monde de la sécurité informatique</p>
                 <div class="hero-tags">
-                    <span class="tag">Pentesting</span>
-                    <span class="tag">Malware Analysis</span>
+                    <span class="tag">DevSecOps</span>
+                    <span class="tag">Forensic</span>
                     <span class="tag">CTF</span>
-                    <span class="tag">Bug Bounty</span>
+                    <span class="tag">Cheat</span>
                     <span class="tag">OSINT</span>
-                    <span class="tag">Red Team</span>
+                    <span class="tag">Red Team / Blue Team</span>
                 </div>
             </div>
         </section>
