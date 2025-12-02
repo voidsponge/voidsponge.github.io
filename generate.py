@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Générateur de blog statique pour CyberInsight - Version Améliorée
-Lit tous les articles markdown du dossier _articles/ et génère le site dans _site/
+Générateur de blog statique pour CyberInsight - Version ELITE
+Avec : Commentaires, ToC, RSS, Séries, Code Playground
 """
 
 import os
@@ -10,6 +10,8 @@ import json
 import markdown
 from pathlib import Path
 from datetime import datetime
+from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.dom import minidom
 
 # Dossiers
 ARTICLES_DIR = Path("_articles")
@@ -36,10 +38,39 @@ def parse_frontmatter(content):
     return frontmatter, content
 
 def estimate_reading_time(text):
-    """Estime le temps de lecture (mots par minute)"""
+    """Estime le temps de lecture"""
     words = len(re.findall(r'\w+', text))
-    minutes = max(1, round(words / 200))  # 200 mots par minute
+    minutes = max(1, round(words / 200))
     return minutes
+
+def extract_headings(html_content):
+    """Extrait les titres H2 et H3 pour la table des matières"""
+    headings = []
+    pattern = r'<h([23])>(.*?)</h\1>'
+    
+    for match in re.finditer(pattern, html_content):
+        level = int(match.group(1))
+        text = re.sub('<[^<]+?>', '', match.group(2))
+        slug = re.sub(r'[^\w\s-]', '', text.lower())
+        slug = re.sub(r'[-\s]+', '-', slug)
+        headings.append({
+            'level': level,
+            'text': text,
+            'slug': slug
+        })
+    
+    return headings
+
+def add_heading_ids(html_content):
+    """Ajoute des IDs aux titres pour les ancres"""
+    def add_id(match):
+        level = match.group(1)
+        text = match.group(2)
+        slug = re.sub(r'[^\w\s-]', '', re.sub('<[^<]+?>', '', text).lower())
+        slug = re.sub(r'[-\s]+', '-', slug)
+        return f'<h{level} id="{slug}">{text}</h{level}>'
+    
+    return re.sub(r'<h([23])>(.*?)</h\1>', add_id, html_content)
 
 def load_article(filepath):
     """Charge un article markdown et extrait les métadonnées"""
@@ -48,30 +79,32 @@ def load_article(filepath):
     
     frontmatter, markdown_content = parse_frontmatter(content)
     
-    # Extraire le titre du markdown si pas dans frontmatter
     if 'title' not in frontmatter:
         title_match = re.search(r'^#\s+(.+)$', markdown_content, re.MULTILINE)
         if title_match:
             frontmatter['title'] = title_match.group(1)
     
-    # Générer un slug depuis le nom de fichier
     slug = filepath.stem
     
-    # Convertir le markdown en HTML
     md = markdown.Markdown(extensions=['extra', 'codehilite', 'fenced_code', 'tables', 'toc'])
     html_content = md.convert(markdown_content)
     
-    # Extraire un excerpt des premiers 200 caractères
+    # Ajouter des IDs aux titres et extraire la ToC
+    html_content = add_heading_ids(html_content)
+    headings = extract_headings(html_content)
+    
     plain_text = re.sub('<[^<]+?>', '', html_content)
     excerpt = plain_text[:200].strip() + '...' if len(plain_text) > 200 else plain_text
     
-    # Calculer le temps de lecture
     reading_time = estimate_reading_time(plain_text)
     
-    # Parser les tags s'ils existent
     tags = []
     if 'tags' in frontmatter:
         tags = [tag.strip() for tag in frontmatter['tags'].split(',')]
+    
+    # Support des séries d'articles
+    series = frontmatter.get('series', None)
+    series_part = int(frontmatter.get('series_part', 0))
     
     return {
         'title': frontmatter.get('title', 'Sans titre'),
@@ -83,6 +116,9 @@ def load_article(filepath):
         'content': html_content,
         'reading_time': reading_time,
         'tags': tags,
+        'series': series,
+        'series_part': series_part,
+        'headings': headings,
         'filepath': filepath
     }
 
@@ -99,31 +135,89 @@ def format_date(date_str):
         return date_str
 
 def get_related_articles(article, all_articles, max_related=3):
-    """Trouve les articles liés par catégorie et tags"""
+    """Trouve les articles liés"""
     related = []
     
     for other in all_articles:
         if other['slug'] == article['slug']:
             continue
         
-        # Score de similarité
         score = 0
         if other['category'] == article['category']:
             score += 3
         
-        # Tags communs
         common_tags = set(article['tags']).intersection(set(other['tags']))
         score += len(common_tags) * 2
+        
+        # Bonus si même série
+        if article['series'] and other['series'] == article['series']:
+            score += 10
         
         if score > 0:
             related.append((score, other))
     
-    # Trier par score et retourner les meilleurs
     related.sort(reverse=True, key=lambda x: x[0])
     return [r[1] for r in related[:max_related]]
 
+def get_series_articles(article, all_articles):
+    """Récupère tous les articles de la même série"""
+    if not article['series']:
+        return []
+    
+    series_articles = [a for a in all_articles if a['series'] == article['series']]
+    series_articles.sort(key=lambda x: x['series_part'])
+    return series_articles
+
+def generate_toc_html(headings):
+    """Génère le HTML de la table des matières"""
+    if not headings:
+        return ''
+    
+    toc_html = '<nav class="table-of-contents"><h4>📖 Table des matières</h4><ul class="toc-list">'
+    
+    for heading in headings:
+        indent_class = 'toc-h3' if heading['level'] == 3 else 'toc-h2'
+        toc_html += f'<li class="{indent_class}"><a href="#{heading["slug"]}">{heading["text"]}</a></li>'
+    
+    toc_html += '</ul></nav>'
+    return toc_html
+
+def generate_series_nav(article, series_articles):
+    """Génère la navigation de série"""
+    if not series_articles or len(series_articles) <= 1:
+        return ''
+    
+    current_index = next((i for i, a in enumerate(series_articles) if a['slug'] == article['slug']), -1)
+    
+    series_html = f'''
+    <div class="series-navigation">
+        <h4>📚 Série : {article['series']}</h4>
+        <div class="series-progress">
+            <span>Partie {article['series_part']} sur {len(series_articles)}</span>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {(article['series_part'] / len(series_articles)) * 100}%"></div>
+            </div>
+        </div>
+        <div class="series-nav-buttons">
+    '''
+    
+    if current_index > 0:
+        prev_article = series_articles[current_index - 1]
+        series_html += f'<a href="{prev_article["slug"]}.html" class="series-nav-btn">← Partie {prev_article["series_part"]}</a>'
+    else:
+        series_html += '<span class="series-nav-btn disabled">← Début</span>'
+    
+    if current_index < len(series_articles) - 1:
+        next_article = series_articles[current_index + 1]
+        series_html += f'<a href="{next_article["slug"]}.html" class="series-nav-btn">Partie {next_article["series_part"]} →</a>'
+    else:
+        series_html += '<span class="series-nav-btn disabled">Fin →</span>'
+    
+    series_html += '</div></div>'
+    return series_html
+
 def generate_article_page(article, all_articles):
-    """Génère une page HTML pour un article"""
+    """Génère une page HTML pour un article avec ToC et commentaires"""
     
     # Articles liés
     related_articles = get_related_articles(article, all_articles)
@@ -148,6 +242,13 @@ def generate_article_page(article, all_articles):
             </div>
         </section>
         '''
+    
+    # Navigation série
+    series_articles = get_series_articles(article, all_articles)
+    series_nav = generate_series_nav(article, series_articles)
+    
+    # Table des matières
+    toc_html = generate_toc_html(article['headings'])
     
     # Tags HTML
     tags_html = ''
@@ -237,6 +338,19 @@ def generate_article_page(article, all_articles):
             z-index: 1;
         }}
 
+        .container-with-toc {{
+            max-width: 1400px;
+            display: grid;
+            grid-template-columns: 1fr 900px 250px 1fr;
+            gap: 2rem;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }}
+
+        .container-with-toc > * {{
+            grid-column: 2;
+        }}
+
         header {{
             padding: 2rem 0;
             border-bottom: 1px solid var(--color-border);
@@ -280,7 +394,6 @@ def generate_article_page(article, all_articles):
 
         .back-link:hover {{ color: var(--color-primary); }}
 
-        /* Theme Toggle */
         .theme-toggle {{
             background: var(--color-surface);
             border: 1px solid var(--color-border);
@@ -299,6 +412,133 @@ def generate_article_page(article, all_articles):
         .theme-toggle:hover {{
             border-color: var(--color-primary);
             transform: rotate(180deg);
+        }}
+
+        /* Table of Contents */
+        .table-of-contents {{
+            grid-column: 3;
+            position: sticky;
+            top: 100px;
+            align-self: start;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }}
+
+        .table-of-contents h4 {{
+            font-family: var(--font-display);
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }}
+
+        .toc-list {{
+            list-style: none;
+        }}
+
+        .toc-list li {{
+            margin-bottom: 0.5rem;
+        }}
+
+        .toc-list a {{
+            color: var(--color-text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            display: block;
+            padding: 0.3rem 0;
+            border-left: 2px solid transparent;
+            padding-left: 0.5rem;
+        }}
+
+        .toc-list a:hover {{
+            color: var(--color-primary);
+            border-left-color: var(--color-primary);
+        }}
+
+        .toc-list a.active {{
+            color: var(--color-primary);
+            border-left-color: var(--color-primary);
+            font-weight: 600;
+        }}
+
+        .toc-h3 {{
+            margin-left: 1rem;
+        }}
+
+        .toc-h3 a {{
+            font-size: 0.85rem;
+        }}
+
+        /* Series Navigation */
+        .series-navigation {{
+            background: linear-gradient(135deg, var(--color-surface-elevated), var(--color-surface));
+            border: 1px solid var(--color-primary);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 3rem;
+        }}
+
+        .series-navigation h4 {{
+            font-family: var(--font-display);
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }}
+
+        .series-progress {{
+            margin-bottom: 1rem;
+        }}
+
+        .series-progress span {{
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            font-family: var(--font-display);
+        }}
+
+        .progress-bar {{
+            height: 8px;
+            background: var(--color-surface-elevated);
+            border-radius: 4px;
+            margin-top: 0.5rem;
+            overflow: hidden;
+        }}
+
+        .progress-fill {{
+            height: 100%;
+            background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+            transition: width 0.3s ease;
+        }}
+
+        .series-nav-buttons {{
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }}
+
+        .series-nav-btn {{
+            flex: 1;
+            padding: 0.8rem 1.5rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            color: var(--color-text);
+            text-decoration: none;
+            text-align: center;
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }}
+
+        .series-nav-btn:hover:not(.disabled) {{
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+        }}
+
+        .series-nav-btn.disabled {{
+            opacity: 0.5;
+            cursor: not-allowed;
         }}
 
         article {{ padding: 4rem 0; }}
@@ -369,6 +609,7 @@ def generate_article_page(article, all_articles):
             margin-top: 2.5rem;
             margin-bottom: 1rem;
             font-family: var(--font-display);
+            scroll-margin-top: 100px;
         }}
 
         .article-content h1 {{ font-size: 2.5rem; }}
@@ -404,6 +645,28 @@ def generate_article_page(article, all_articles):
             padding: 1.5rem;
             overflow-x: auto;
             margin-bottom: 1.5rem;
+            position: relative;
+        }}
+
+        /* Code Playground Button */
+        .code-playground-btn {{
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: var(--color-primary);
+            color: var(--color-bg);
+            border: none;
+            padding: 0.3rem 0.8rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-family: var(--font-display);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }}
+
+        .code-playground-btn:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 245, 160, 0.3);
         }}
 
         .article-content pre code {{
@@ -458,6 +721,139 @@ def generate_article_page(article, all_articles):
             border: none;
             border-top: 1px solid var(--color-border);
             margin: 3rem 0;
+        }}
+
+        /* Code Playground Modal */
+        .playground-modal {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .playground-modal.active {{
+            display: flex;
+        }}
+
+        .playground-content {{
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 1200px;
+            height: 80%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }}
+
+        .playground-header {{
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .playground-header h3 {{
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+        }}
+
+        .playground-close {{
+            background: none;
+            border: none;
+            color: var(--color-text);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            transition: color 0.3s ease;
+        }}
+
+        .playground-close:hover {{
+            color: var(--color-accent);
+        }}
+
+        .playground-body {{
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            padding: 1rem;
+            overflow: hidden;
+        }}
+
+        .playground-editor,
+        .playground-output {{
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }}
+
+        .playground-editor h4,
+        .playground-output h4 {{
+            font-family: var(--font-display);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }}
+
+        .playground-editor textarea {{
+            flex: 1;
+            background: var(--color-bg);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: var(--font-display);
+            font-size: 0.95rem;
+            resize: none;
+        }}
+
+        .playground-output-content {{
+            flex: 1;
+            background: var(--color-bg);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-y: auto;
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+        }}
+
+        .playground-controls {{
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--color-border);
+            display: flex;
+            gap: 1rem;
+        }}
+
+        .playground-btn {{
+            padding: 0.7rem 1.5rem;
+            background: var(--color-primary);
+            color: var(--color-bg);
+            border: none;
+            border-radius: 6px;
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }}
+
+        .playground-btn:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 245, 160, 0.3);
+        }}
+
+        .playground-btn.secondary {{
+            background: var(--color-surface-elevated);
+            color: var(--color-text);
         }}
 
         /* Share Buttons */
@@ -555,7 +951,20 @@ def generate_article_page(article, all_articles):
             line-height: 1.5;
         }}
 
-        /* Back to Top Button */
+        /* Comments Section */
+        .comments-section {{
+            margin: 4rem 0;
+            padding-top: 3rem;
+            border-top: 1px solid var(--color-border);
+        }}
+
+        .comments-section h3 {{
+            font-family: var(--font-display);
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+        }}
+
+        /* Back to Top */
         .back-to-top {{
             position: fixed;
             bottom: 2rem;
@@ -593,6 +1002,20 @@ def generate_article_page(article, all_articles):
             color: var(--color-text-muted);
         }}
 
+        @media (max-width: 1200px) {{
+            .container-with-toc {{
+                grid-template-columns: 1fr;
+            }}
+
+            .table-of-contents {{
+                display: none;
+            }}
+
+            .container-with-toc > * {{
+                grid-column: 1;
+            }}
+        }}
+
         @media (max-width: 768px) {{
             .article-title {{ font-size: 2rem; }}
             .article-content {{ font-size: 1rem; }}
@@ -602,6 +1025,9 @@ def generate_article_page(article, all_articles):
                 right: 1rem;
                 width: 45px;
                 height: 45px;
+            }}
+            .playground-body {{
+                grid-template-columns: 1fr;
             }}
         }}
     </style>
@@ -622,8 +1048,10 @@ def generate_article_page(article, all_articles):
     </header>
 
     <main>
-        <div class="container">
+        <div class="container-with-toc">
             <article>
+                {series_nav}
+
                 <div class="article-header">
                     <div class="article-meta">
                         <span class="category-badge">{article['category']}</span>
@@ -661,11 +1089,62 @@ def generate_article_page(article, all_articles):
                 </div>
 
                 {related_html}
+
+                <section class="comments-section">
+                    <h3>💬 Commentaires</h3>
+                    <script src="https://giscus.app/client.js"
+                        data-repo="voidsponge/voidsponge.github.io"
+                        data-repo-id="VOTRE_REPO_ID"
+                        data-category="General"
+                        data-category-id="VOTRE_CATEGORY_ID"
+                        data-mapping="pathname"
+                        data-strict="0"
+                        data-reactions-enabled="1"
+                        data-emit-metadata="0"
+                        data-input-position="top"
+                        data-theme="dark"
+                        data-lang="fr"
+                        crossorigin="anonymous"
+                        async>
+                    </script>
+                    <p style="margin-top: 1rem; color: var(--color-text-muted); font-size: 0.9rem;">
+                        💡 Pour activer les commentaires, configurez giscus avec votre repo GitHub<br>
+                        Guide : <a href="https://giscus.app/fr" target="_blank" style="color: var(--color-secondary);">giscus.app/fr</a>
+                    </p>
+                </section>
             </article>
+
+            {toc_html}
         </div>
     </main>
 
     <button class="back-to-top" id="backToTop" aria-label="Retour en haut">↑</button>
+
+    <!-- Code Playground Modal -->
+    <div class="playground-modal" id="playgroundModal">
+        <div class="playground-content">
+            <div class="playground-header">
+                <h3>🎮 Code Playground</h3>
+                <button class="playground-close" onclick="closePlayground()">×</button>
+            </div>
+            <div class="playground-body">
+                <div class="playground-editor">
+                    <h4>📝 Éditeur</h4>
+                    <textarea id="playgroundCode" spellcheck="false"></textarea>
+                </div>
+                <div class="playground-output">
+                    <h4>🖥️ Sortie</h4>
+                    <div class="playground-output-content" id="playgroundOutput">
+                        Cliquez sur "Exécuter" pour voir le résultat...
+                    </div>
+                </div>
+            </div>
+            <div class="playground-controls">
+                <button class="playground-btn" onclick="runCode()">▶️ Exécuter</button>
+                <button class="playground-btn secondary" onclick="clearOutput()">🗑️ Effacer</button>
+            </div>
+        </div>
+    </div>
 
     <footer>
         <div class="container">
@@ -682,7 +1161,6 @@ def generate_article_page(article, all_articles):
         const themeIcon = document.getElementById('themeIcon');
         const html = document.documentElement;
 
-        // Load saved theme
         const savedTheme = localStorage.getItem('theme') || 'dark';
         html.setAttribute('data-theme', savedTheme);
         updateThemeIcon(savedTheme);
@@ -722,35 +1200,146 @@ def generate_article_page(article, all_articles):
             navigator.clipboard.writeText(window.location.href);
             alert('✅ Lien copié dans le presse-papiers !');
         }}
+
+        // Interactive ToC
+        const tocLinks = document.querySelectorAll('.toc-list a');
+        const headings = document.querySelectorAll('.article-content h2, .article-content h3');
+
+        window.addEventListener('scroll', () => {{
+            let current = '';
+            
+            headings.forEach(heading => {{
+                const rect = heading.getBoundingClientRect();
+                if (rect.top >= 0 && rect.top <= 200) {{
+                    current = heading.id;
+                }}
+            }});
+
+            tocLinks.forEach(link => {{
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {{
+                    link.classList.add('active');
+                }}
+            }});
+        }});
+
+        // Code Playground
+        let playgroundModal = document.getElementById('playgroundModal');
+
+        // Add "Run Code" buttons to code blocks
+        document.querySelectorAll('pre code.language-python, pre code.language-javascript').forEach((block, index) => {{
+            const btn = document.createElement('button');
+            btn.className = 'code-playground-btn';
+            btn.textContent = '▶️ Exécuter';
+            btn.onclick = () => openPlayground(block.textContent, block.classList.contains('language-python') ? 'python' : 'javascript');
+            block.parentElement.style.position = 'relative';
+            block.parentElement.insertBefore(btn, block);
+        }});
+
+        function openPlayground(code, language) {{
+            document.getElementById('playgroundCode').value = code;
+            document.getElementById('playgroundCode').dataset.language = language;
+            playgroundModal.classList.add('active');
+        }}
+
+        function closePlayground() {{
+            playgroundModal.classList.remove('active');
+        }}
+
+        function clearOutput() {{
+            document.getElementById('playgroundOutput').textContent = 'Sortie effacée...';
+        }}
+
+        function runCode() {{
+            const code = document.getElementById('playgroundCode').value;
+            const language = document.getElementById('playgroundCode').dataset.language;
+            const output = document.getElementById('playgroundOutput');
+
+            try {{
+                if (language === 'javascript') {{
+                    // Capture console.log
+                    let logs = [];
+                    const oldLog = console.log;
+                    console.log = (...args) => logs.push(args.join(' '));
+                    
+                    eval(code);
+                    
+                    console.log = oldLog;
+                    output.textContent = logs.length > 0 ? logs.join('\\n') : 'Code exécuté avec succès ! (Pas de sortie)';
+                }} else if (language === 'python') {{
+                    output.textContent = '⚠️ Python nécessite Pyodide (chargement lourd).\\nPour une démo complète, intégrez Pyodide.\\n\\nCode Python détecté :\\n' + code;
+                }} else {{
+                    output.textContent = 'Langage non supporté pour l\\'instant.';
+                }}
+            }} catch (error) {{
+                output.textContent = '❌ Erreur :\\n' + error.message;
+                output.style.color = 'var(--color-accent)';
+            }}
+        }}
+
+        // Close modal on click outside
+        playgroundModal.addEventListener('click', (e) => {{
+            if (e.target === playgroundModal) {{
+                closePlayground();
+            }}
+        }});
     </script>
 </body>
 </html>'''
     
     return html
 
+def generate_rss_feed(articles):
+    """Génère le flux RSS"""
+    rss = Element('rss', version='2.0')
+    rss.set('xmlns:atom', 'http://www.w3.org/2005/Atom')
+    
+    channel = SubElement(rss, 'channel')
+    
+    SubElement(channel, 'title').text = 'CyberInsight - Blog de Cybersécurité'
+    SubElement(channel, 'link').text = 'https://voidsponge.github.io'
+    SubElement(channel, 'description').text = 'Explorez les dernières menaces, vulnérabilités et techniques de protection dans le monde de la sécurité informatique'
+    SubElement(channel, 'language').text = 'fr'
+    
+    atom_link = SubElement(channel, 'atom:link')
+    atom_link.set('href', 'https://voidsponge.github.io/rss.xml')
+    atom_link.set('rel', 'self')
+    atom_link.set('type', 'application/rss+xml')
+    
+    for article in sorted(articles, key=lambda x: x['date'], reverse=True)[:20]:
+        item = SubElement(channel, 'item')
+        SubElement(item, 'title').text = article['title']
+        SubElement(item, 'link').text = f"https://voidsponge.github.io/articles/{article['slug']}.html"
+        SubElement(item, 'description').text = article['excerpt']
+        SubElement(item, 'pubDate').text = datetime.strptime(article['date'], '%Y-%m-%d').strftime('%a, %d %b %Y 00:00:00 +0000')
+        SubElement(item, 'guid').text = f"https://voidsponge.github.io/articles/{article['slug']}.html"
+        
+        for tag in article['tags']:
+            SubElement(item, 'category').text = tag
+    
+    xml_str = minidom.parseString(tostring(rss)).toprettyxml(indent='  ')
+    return xml_str
+
 def generate_index_page(articles):
-    """Génère la page d'accueil avec toutes les améliorations"""
+    """Génère la page d'accueil (code existant conservé avec améliorations mineures)"""
     
-    # Trier par date (plus récent en premier)
     articles_sorted = sorted(articles, key=lambda x: x['date'], reverse=True)
-    
-    # Article en vedette (le plus récent)
     featured = articles_sorted[0] if articles_sorted else None
-    
-    # Extraire les catégories uniques
     categories = sorted(set(article['category'] for article in articles_sorted))
     
-    # Générer les boutons de filtre de catégories
     category_filters = ''
     for category in categories:
         category_filters += f'<button class="filter-btn" data-category="{category}">{category}</button>\n                    '
     
-    # Générer les cartes d'articles avec temps de lecture
     articles_html = ''
     for article in articles_sorted:
         tags_preview = ''
         if article['tags']:
             tags_preview = ' '.join([f'#{tag}' for tag in article['tags'][:3]])
+        
+        series_badge = ''
+        if article['series']:
+            series_badge = f'<span class="series-badge">📚 Série: {article["series"]} #{article["series_part"]}</span>'
         
         articles_html += f'''
         <article class="article-card" data-category="{article['category']}">
@@ -762,6 +1351,7 @@ def generate_index_page(articles):
                 <span class="reading-time">⏱️ {article['reading_time']} min</span>
             </div>
             <h3>{article['title']}</h3>
+            {series_badge}
             <p class="article-excerpt">{article['excerpt']}</p>
             <div class="article-card-footer">
                 <a href="articles/{article['slug']}.html" class="read-more">Lire plus</a>
@@ -788,22 +1378,24 @@ def generate_index_page(articles):
         </div>
         '''
     
-    # Statistiques
     total_articles = len(articles)
     total_reading_time = sum(a['reading_time'] for a in articles)
     all_categories = len(categories)
     
+    # HTML simplifié - je garde seulement les parties critiques
     html = f'''<!DOCTYPE html>
 <html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CyberInsight - Blog de Cybersécurité</title>
-    <meta name="description" content="Explorez les dernières menaces, vulnérabilités et techniques de protection dans le monde de la sécurité informatique">
+    <meta name="description" content="Explorez les dernières menaces, vulnérabilités et techniques de protection">
+    <link rel="alternate" type="application/rss+xml" title="CyberInsight RSS" href="/rss.xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
+        /* Styles inchangés du code précédent - conservés pour la concision */
         :root[data-theme="dark"] {{
             --color-bg: #0a0e17;
             --color-surface: #151922;
@@ -955,7 +1547,6 @@ def generate_index_page(articles):
             width: 100%;
         }}
 
-        /* Theme Toggle */
         .theme-toggle {{
             background: var(--color-surface);
             border: 1px solid var(--color-border);
@@ -976,7 +1567,16 @@ def generate_index_page(articles):
             transform: rotate(180deg);
         }}
 
-        /* Stats Bar */
+        .rss-link {{
+            color: var(--color-accent);
+            font-size: 1.3rem;
+            transition: transform 0.3s ease;
+        }}
+
+        .rss-link:hover {{
+            transform: scale(1.2);
+        }}
+
         .stats-bar {{
             padding: 1.5rem 0;
             display: flex;
@@ -1007,7 +1607,6 @@ def generate_index_page(articles):
             margin-top: 0.3rem;
         }}
 
-        /* Search and Filter Section */
         .search-filter-section {{
             padding: 2rem 0;
             border-bottom: 1px solid var(--color-border);
@@ -1246,6 +1845,17 @@ def generate_index_page(articles):
             gap: 0.3rem;
         }}
 
+        .series-badge {{
+            display: inline-block;
+            background: var(--color-accent);
+            color: var(--color-bg);
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-family: var(--font-display);
+            margin-bottom: 0.5rem;
+        }}
+
         .article-card h3 {{
             font-size: 1.5rem;
             margin-bottom: 1rem;
@@ -1352,7 +1962,6 @@ def generate_index_page(articles):
             margin-bottom: 2rem;
         }}
 
-        /* Back to Top Button */
         .back-to-top {{
             position: fixed;
             bottom: 2rem;
@@ -1419,6 +2028,7 @@ def generate_index_page(articles):
                 <nav>
                     <a href="#articles">Articles</a>
                     <a href="https://github.com/voidsponge" target="_blank">GitHub</a>
+                    <a href="/rss.xml" class="rss-link" title="Flux RSS">📡</a>
                     <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
                         <span id="themeIcon">🌙</span>
                     </button>
@@ -1499,12 +2109,10 @@ def generate_index_page(articles):
     </footer>
 
     <script>
-        // Theme Toggle
         const themeToggle = document.getElementById('themeToggle');
         const themeIcon = document.getElementById('themeIcon');
         const html = document.documentElement;
 
-        // Load saved theme
         const savedTheme = localStorage.getItem('theme') || 'dark';
         html.setAttribute('data-theme', savedTheme);
         updateThemeIcon(savedTheme);
@@ -1521,7 +2129,6 @@ def generate_index_page(articles):
             themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
         }}
 
-        // Search
         const searchInput = document.getElementById('searchInput');
         const articlesGrid = document.getElementById('articlesGrid');
         const noResults = document.getElementById('noResults');
@@ -1551,7 +2158,6 @@ def generate_index_page(articles):
             noResults.style.display = visibleCount === 0 ? 'block' : 'none';
         }});
 
-        // Filtrage par catégorie
         const filterButtons = document.querySelectorAll('.filter-btn');
 
         filterButtons.forEach(button => {{
@@ -1578,7 +2184,6 @@ def generate_index_page(articles):
             }});
         }});
 
-        // Back to Top
         const backToTop = document.getElementById('backToTop');
 
         window.addEventListener('scroll', () => {{
@@ -1603,35 +2208,38 @@ def generate_index_page(articles):
 
 def main():
     """Fonction principale"""
-    print("🚀 Génération du blog CyberInsight amélioré...")
+    print("🚀 Génération du blog CyberInsight ELITE...")
     
-    # Créer les dossiers de sortie
     OUTPUT_DIR.mkdir(exist_ok=True)
     ARTICLES_OUTPUT.mkdir(exist_ok=True)
     
-    # Charger tous les articles
     articles = []
     if ARTICLES_DIR.exists():
         for filepath in ARTICLES_DIR.glob("*.md"):
-            if not filepath.name.startswith('_'):  # Ignorer les fichiers commençant par _
+            if not filepath.name.startswith('_'):
                 print(f"  📄 Traitement de {filepath.name}...")
                 article = load_article(filepath)
                 articles.append(article)
                 
-                # Générer la page de l'article
                 article_html = generate_article_page(article, articles)
                 output_path = ARTICLES_OUTPUT / f"{article['slug']}.html"
                 output_path.write_text(article_html, encoding='utf-8')
     
     print(f"  ✅ {len(articles)} article(s) traité(s)")
     
-    # Générer la page d'accueil
+    # Générer RSS
+    print("  📡 Génération du flux RSS...")
+    rss_xml = generate_rss_feed(articles)
+    (OUTPUT_DIR / "rss.xml").write_text(rss_xml, encoding='utf-8')
+    
+    # Générer page d'accueil
     print("  🏠 Génération de la page d'accueil...")
     index_html = generate_index_page(articles)
     (OUTPUT_DIR / "index.html").write_text(index_html, encoding='utf-8')
     
-    print("✨ Blog généré avec succès dans le dossier _site/")
-    print(f"📊 Statistiques : {len(articles)} articles, {sum(a['reading_time'] for a in articles)} min de lecture totales")
+    print("✨ Blog ELITE généré avec succès !")
+    print(f"📊 Statistiques : {len(articles)} articles, {sum(a['reading_time'] for a in articles)} min de lecture")
+    print("🎉 Fonctionnalités : ToC, RSS, Séries, Commentaires, Code Playground")
 
 if __name__ == "__main__":
     main()
