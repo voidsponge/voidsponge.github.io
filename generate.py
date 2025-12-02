@@ -1371,25 +1371,26 @@ def generate_article_page(article, all_articles):
         hljs.highlightAll();
 
         // Theme Toggle
-        const themeToggle = document.getElementById('themeToggle');
-        const themeIcon = document.getElementById('themeIcon');
-        const html = document.documentElement;
+        // Theme Toggle
+        (function() {{
+            const themeToggle = document.getElementById('themeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+            const html = document.documentElement;
 
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        html.setAttribute('data-theme', savedTheme);
-        updateThemeIcon(savedTheme);
+            if (!themeToggle || !themeIcon) return;
 
-        themeToggle.addEventListener('click', () => {{
-            const currentTheme = html.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            html.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            updateThemeIcon(newTheme);
-        }});
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            html.setAttribute('data-theme', savedTheme);
+            themeIcon.textContent = savedTheme === 'dark' ? '🌙' : '☀️';
 
-        function updateThemeIcon(theme) {{
-            themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
-        }}
+            themeToggle.addEventListener('click', () => {{
+                const currentTheme = html.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                html.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                themeIcon.textContent = newTheme === 'dark' ? '🌙' : '☀️';
+            }});
+        }})();
 
         // Back to Top
         const backToTop = document.getElementById('backToTop');
@@ -2682,25 +2683,26 @@ Tapez <span style="color: var(--color-primary);">help</span> pour voir les comma
     </div>
 
     <script>
-        const themeToggle = document.getElementById('themeToggle');
-        const themeIcon = document.getElementById('themeIcon');
-        const html = document.documentElement;
+        // Theme Toggle
+        (function() {{
+            const themeToggle = document.getElementById('themeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+            const html = document.documentElement;
 
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        html.setAttribute('data-theme', savedTheme);
-        updateThemeIcon(savedTheme);
+            if (!themeToggle || !themeIcon) return;
 
-        themeToggle.addEventListener('click', () => {{
-            const currentTheme = html.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            html.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            updateThemeIcon(newTheme);
-        }});
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            html.setAttribute('data-theme', savedTheme);
+            themeIcon.textContent = savedTheme === 'dark' ? '🌙' : '☀️';
 
-        function updateThemeIcon(theme) {{
-            themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
-        }}
+            themeToggle.addEventListener('click', () => {{
+                const currentTheme = html.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                html.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                themeIcon.textContent = newTheme === 'dark' ? '🌙' : '☀️';
+            }});
+        }})();
 
         const searchInput = document.getElementById('searchInput');
         const articlesGrid = document.getElementById('articlesGrid');
@@ -2775,12 +2777,16 @@ Tapez <span style="color: var(--color-primary);">help</span> pour voir les comma
         }});
 
         // Interactive Shell
-        const shellBtn = document.getElementById('shellBtn');
-        const shellModal = document.getElementById('shellModal');
-        const shellInput = document.getElementById('shellInput');
-        const shellOutput = document.getElementById('shellOutput');
-        let commandHistory = [];
-        let historyIndex = -1;
+        (function() {{
+            const shellBtn = document.getElementById('shellBtn');
+            const shellModal = document.getElementById('shellModal');
+            const shellInput = document.getElementById('shellInput');
+            const shellOutput = document.getElementById('shellOutput');
+            
+            if (!shellBtn || !shellModal || !shellInput || !shellOutput) return;
+            
+            let commandHistory = [];
+            let historyIndex = -1;
 
         const commands = {{
             help: {{
@@ -2951,7 +2957,7 @@ Tapez <span style="color: var(--color-primary);">help</span> pour voir les comma
             }});
         }}
 
-        function closeShell() {{
+        window.closeShell = function() {{
             shellModal.classList.remove('active');
         }}
 
@@ -2982,7 +2988,7 @@ Tapez <span style="color: var(--color-primary);">help</span> pour voir les comma
             }}
         }});
 
-        function executeCommand(input) {{
+        window.executeCommand = function(input) {{
             const [cmd, ...args] = input.split(' ');
             
             shellOutput.innerHTML += `<span style="color: var(--color-primary);">root@cyberinsight:~#</span> ${{input}}\n`;
@@ -3005,6 +3011,8 @@ Tapez <span style="color: var(--color-primary);">help</span> pour voir les comma
                 closeShell();
             }}
         }});
+        
+        }})(); // End Shell IIFE
     </script>
 </body>
 </html>'''
