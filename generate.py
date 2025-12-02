@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Générateur de blog statique pour CyberInsight
+Générateur de blog statique pour CyberInsight - Version Améliorée
 Lit tous les articles markdown du dossier _articles/ et génère le site dans _site/
 """
 
@@ -35,6 +35,12 @@ def parse_frontmatter(content):
     
     return frontmatter, content
 
+def estimate_reading_time(text):
+    """Estime le temps de lecture (mots par minute)"""
+    words = len(re.findall(r'\w+', text))
+    minutes = max(1, round(words / 200))  # 200 mots par minute
+    return minutes
+
 def load_article(filepath):
     """Charge un article markdown et extrait les métadonnées"""
     with open(filepath, 'r', encoding='utf-8') as f:
@@ -55,9 +61,17 @@ def load_article(filepath):
     md = markdown.Markdown(extensions=['extra', 'codehilite', 'fenced_code', 'tables', 'toc'])
     html_content = md.convert(markdown_content)
     
-    # Extraire un excerpt des premiers 150 caractères
+    # Extraire un excerpt des premiers 200 caractères
     plain_text = re.sub('<[^<]+?>', '', html_content)
     excerpt = plain_text[:200].strip() + '...' if len(plain_text) > 200 else plain_text
+    
+    # Calculer le temps de lecture
+    reading_time = estimate_reading_time(plain_text)
+    
+    # Parser les tags s'ils existent
+    tags = []
+    if 'tags' in frontmatter:
+        tags = [tag.strip() for tag in frontmatter['tags'].split(',')]
     
     return {
         'title': frontmatter.get('title', 'Sans titre'),
@@ -67,6 +81,8 @@ def load_article(filepath):
         'author': frontmatter.get('author', 'CyberInsight'),
         'excerpt': frontmatter.get('excerpt', excerpt),
         'content': html_content,
+        'reading_time': reading_time,
+        'tags': tags,
         'filepath': filepath
     }
 
@@ -75,28 +91,86 @@ def format_date(date_str):
     try:
         date_obj = datetime.strptime(date_str, '%Y-%m-%d')
         months = {
-            1: 'Jan', 2: 'Fév', 3: 'Mars', 4: 'Avr', 5: 'Mai', 6: 'Juin',
-            7: 'Juil', 8: 'Août', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Déc'
+            1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril', 5: 'Mai', 6: 'Juin',
+            7: 'Juillet', 8: 'Août', 9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'
         }
         return f"{date_obj.day} {months[date_obj.month]} {date_obj.year}"
     except:
         return date_str
 
-def generate_article_page(article):
+def get_related_articles(article, all_articles, max_related=3):
+    """Trouve les articles liés par catégorie et tags"""
+    related = []
+    
+    for other in all_articles:
+        if other['slug'] == article['slug']:
+            continue
+        
+        # Score de similarité
+        score = 0
+        if other['category'] == article['category']:
+            score += 3
+        
+        # Tags communs
+        common_tags = set(article['tags']).intersection(set(other['tags']))
+        score += len(common_tags) * 2
+        
+        if score > 0:
+            related.append((score, other))
+    
+    # Trier par score et retourner les meilleurs
+    related.sort(reverse=True, key=lambda x: x[0])
+    return [r[1] for r in related[:max_related]]
+
+def generate_article_page(article, all_articles):
     """Génère une page HTML pour un article"""
     
+    # Articles liés
+    related_articles = get_related_articles(article, all_articles)
+    related_html = ''
+    
+    if related_articles:
+        related_cards = ''
+        for related in related_articles:
+            related_cards += f'''
+            <a href="{related['slug']}.html" class="related-card">
+                <div class="related-category">{related['category']}</div>
+                <h4>{related['title']}</h4>
+                <p>{related['excerpt'][:100]}...</p>
+            </a>
+            '''
+        
+        related_html = f'''
+        <section class="related-articles">
+            <h3>📚 Articles liés</h3>
+            <div class="related-grid">
+                {related_cards}
+            </div>
+        </section>
+        '''
+    
+    # Tags HTML
+    tags_html = ''
+    if article['tags']:
+        tags_items = ''.join([f'<span class="article-tag">#{tag}</span>' for tag in article['tags']])
+        tags_html = f'<div class="article-tags">{tags_items}</div>'
+    
     html = f'''<!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{article['title']} - CyberInsight</title>
+    <meta name="description" content="{article['excerpt'][:150]}">
+    <meta property="og:title" content="{article['title']}">
+    <meta property="og:description" content="{article['excerpt'][:150]}">
+    <meta property="og:type" content="article">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <style>
-        :root {{
+        :root[data-theme="dark"] {{
             --color-bg: #0a0e17;
             --color-surface: #151922;
             --color-surface-elevated: #1e232e;
@@ -106,6 +180,21 @@ def generate_article_page(article):
             --color-text: #e8ecf3;
             --color-text-muted: #8b92a8;
             --color-border: #2a3142;
+        }}
+
+        :root[data-theme="light"] {{
+            --color-bg: #ffffff;
+            --color-surface: #f8f9fa;
+            --color-surface-elevated: #ffffff;
+            --color-primary: #00a870;
+            --color-secondary: #0088cc;
+            --color-accent: #e91e63;
+            --color-text: #1a1a1a;
+            --color-text-muted: #6c757d;
+            --color-border: #dee2e6;
+        }}
+
+        :root {{
             --font-display: 'JetBrains Mono', monospace;
             --font-body: 'Poppins', sans-serif;
         }}
@@ -117,6 +206,7 @@ def generate_article_page(article):
             background: var(--color-bg);
             color: var(--color-text);
             line-height: 1.8;
+            transition: background 0.3s ease, color 0.3s ease;
         }}
 
         body::before {{
@@ -131,6 +221,12 @@ def generate_article_page(article):
                 radial-gradient(circle at 80% 80%, rgba(0, 217, 255, 0.05) 0%, transparent 50%);
             pointer-events: none;
             z-index: 0;
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }}
+
+        [data-theme="light"] body::before {{
+            opacity: 0.3;
         }}
 
         .container {{
@@ -148,7 +244,8 @@ def generate_article_page(article):
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(10, 14, 23, 0.9);
+            background: var(--color-bg);
+            transition: all 0.3s ease;
         }}
 
         .header-content {{
@@ -168,6 +265,12 @@ def generate_article_page(article):
             text-decoration: none;
         }}
 
+        .header-actions {{
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }}
+
         .back-link {{
             color: var(--color-text-muted);
             text-decoration: none;
@@ -177,18 +280,40 @@ def generate_article_page(article):
 
         .back-link:hover {{ color: var(--color-primary); }}
 
+        /* Theme Toggle */
+        .theme-toggle {{
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 50px;
+            padding: 0.5rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .theme-toggle:hover {{
+            border-color: var(--color-primary);
+            transform: rotate(180deg);
+        }}
+
         article {{ padding: 4rem 0; }}
 
         .article-header {{ margin-bottom: 3rem; }}
 
         .article-meta {{
             display: flex;
-            gap: 1rem;
+            gap: 1.5rem;
             align-items: center;
             margin-bottom: 1.5rem;
             font-size: 0.9rem;
             color: var(--color-text-muted);
             font-family: var(--font-display);
+            flex-wrap: wrap;
         }}
 
         .category-badge {{
@@ -202,11 +327,34 @@ def generate_article_page(article):
             letter-spacing: 0.05em;
         }}
 
+        .reading-time {{
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }}
+
         .article-title {{
             font-size: 2.8rem;
             line-height: 1.2;
             margin-bottom: 1rem;
             font-weight: 700;
+        }}
+
+        .article-tags {{
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }}
+
+        .article-tag {{
+            background: var(--color-surface-elevated);
+            color: var(--color-primary);
+            padding: 0.3rem 0.8rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-family: var(--font-display);
+            border: 1px solid var(--color-border);
         }}
 
         .article-content {{
@@ -312,6 +460,131 @@ def generate_article_page(article):
             margin: 3rem 0;
         }}
 
+        /* Share Buttons */
+        .share-section {{
+            margin: 3rem 0;
+            padding: 2rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            text-align: center;
+        }}
+
+        .share-section h4 {{
+            margin-bottom: 1rem;
+            font-family: var(--font-display);
+        }}
+
+        .share-buttons {{
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }}
+
+        .share-btn {{
+            padding: 0.7rem 1.5rem;
+            background: var(--color-surface-elevated);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            color: var(--color-text);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+
+        .share-btn:hover {{
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+        }}
+
+        /* Related Articles */
+        .related-articles {{
+            margin: 4rem 0;
+            padding-top: 3rem;
+            border-top: 1px solid var(--color-border);
+        }}
+
+        .related-articles h3 {{
+            font-family: var(--font-display);
+            font-size: 1.8rem;
+            margin-bottom: 2rem;
+        }}
+
+        .related-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }}
+
+        .related-card {{
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: block;
+        }}
+
+        .related-card:hover {{
+            border-color: var(--color-primary);
+            transform: translateY(-4px);
+        }}
+
+        .related-category {{
+            color: var(--color-primary);
+            font-size: 0.8rem;
+            font-family: var(--font-display);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }}
+
+        .related-card h4 {{
+            color: var(--color-text);
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }}
+
+        .related-card p {{
+            color: var(--color-text-muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }}
+
+        /* Back to Top Button */
+        .back-to-top {{
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 50px;
+            height: 50px;
+            background: var(--color-primary);
+            color: var(--color-bg);
+            border: none;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 245, 160, 0.3);
+        }}
+
+        .back-to-top.visible {{
+            opacity: 1;
+            pointer-events: all;
+        }}
+
+        .back-to-top:hover {{
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 245, 160, 0.4);
+        }}
+
         footer {{
             border-top: 1px solid var(--color-border);
             padding: 2rem 0;
@@ -323,6 +596,13 @@ def generate_article_page(article):
         @media (max-width: 768px) {{
             .article-title {{ font-size: 2rem; }}
             .article-content {{ font-size: 1rem; }}
+            .related-grid {{ grid-template-columns: 1fr; }}
+            .back-to-top {{
+                bottom: 1rem;
+                right: 1rem;
+                width: 45px;
+                height: 45px;
+            }}
         }}
     </style>
 </head>
@@ -331,7 +611,12 @@ def generate_article_page(article):
         <div class="container">
             <div class="header-content">
                 <a href="../index.html" class="logo">CyberInsight</a>
-                <a href="../index.html" class="back-link">← Retour</a>
+                <div class="header-actions">
+                    <a href="../index.html" class="back-link">← Retour</a>
+                    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                        <span id="themeIcon">🌙</span>
+                    </button>
+                </div>
             </div>
         </div>
     </header>
@@ -345,16 +630,42 @@ def generate_article_page(article):
                         <span>{format_date(article['date'])}</span>
                         <span>•</span>
                         <span>{article['author']}</span>
+                        <span>•</span>
+                        <span class="reading-time">⏱️ {article['reading_time']} min</span>
                     </div>
                     <h1 class="article-title">{article['title']}</h1>
+                    {tags_html}
                 </div>
                 
                 <div class="article-content">
                     {article['content']}
                 </div>
+
+                <div class="share-section">
+                    <h4>📤 Partager cet article</h4>
+                    <div class="share-buttons">
+                        <a href="https://twitter.com/intent/tweet?text={article['title']}&url=https://voidsponge.github.io/articles/{article['slug']}.html" 
+                           target="_blank" 
+                           class="share-btn">
+                            𝕏 Twitter
+                        </a>
+                        <a href="https://www.linkedin.com/sharing/share-offsite/?url=https://voidsponge.github.io/articles/{article['slug']}.html" 
+                           target="_blank" 
+                           class="share-btn">
+                            in LinkedIn
+                        </a>
+                        <button onclick="copyLink()" class="share-btn">
+                            🔗 Copier le lien
+                        </button>
+                    </div>
+                </div>
+
+                {related_html}
             </article>
         </div>
     </main>
+
+    <button class="back-to-top" id="backToTop" aria-label="Retour en haut">↑</button>
 
     <footer>
         <div class="container">
@@ -363,14 +674,62 @@ def generate_article_page(article):
     </footer>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script>hljs.highlightAll();</script>
+    <script>
+        hljs.highlightAll();
+
+        // Theme Toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const html = document.documentElement;
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        html.setAttribute('data-theme', savedTheme);
+        updateThemeIcon(savedTheme);
+
+        themeToggle.addEventListener('click', () => {{
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+        }});
+
+        function updateThemeIcon(theme) {{
+            themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
+        }}
+
+        // Back to Top
+        const backToTop = document.getElementById('backToTop');
+
+        window.addEventListener('scroll', () => {{
+            if (window.pageYOffset > 300) {{
+                backToTop.classList.add('visible');
+            }} else {{
+                backToTop.classList.remove('visible');
+            }}
+        }});
+
+        backToTop.addEventListener('click', () => {{
+            window.scrollTo({{
+                top: 0,
+                behavior: 'smooth'
+            }});
+        }});
+
+        // Copy Link
+        function copyLink() {{
+            navigator.clipboard.writeText(window.location.href);
+            alert('✅ Lien copié dans le presse-papiers !');
+        }}
+    </script>
 </body>
 </html>'''
     
     return html
 
 def generate_index_page(articles):
-    """Génère la page d'accueil"""
+    """Génère la page d'accueil avec toutes les améliorations"""
     
     # Trier par date (plus récent en premier)
     articles_sorted = sorted(articles, key=lambda x: x['date'], reverse=True)
@@ -386,19 +745,28 @@ def generate_index_page(articles):
     for category in categories:
         category_filters += f'<button class="filter-btn" data-category="{category}">{category}</button>\n                    '
     
-    # Générer les cartes d'articles
+    # Générer les cartes d'articles avec temps de lecture
     articles_html = ''
     for article in articles_sorted:
+        tags_preview = ''
+        if article['tags']:
+            tags_preview = ' '.join([f'#{tag}' for tag in article['tags'][:3]])
+        
         articles_html += f'''
         <article class="article-card" data-category="{article['category']}">
             <div class="article-meta">
                 <span class="article-category">{article['category']}</span>
                 <span>•</span>
                 <span>{format_date(article['date'])}</span>
+                <span>•</span>
+                <span class="reading-time">⏱️ {article['reading_time']} min</span>
             </div>
             <h3>{article['title']}</h3>
             <p class="article-excerpt">{article['excerpt']}</p>
-            <a href="articles/{article['slug']}.html" class="read-more">Lire plus</a>
+            <div class="article-card-footer">
+                <a href="articles/{article['slug']}.html" class="read-more">Lire plus</a>
+                {f'<div class="tags-preview">{tags_preview}</div>' if tags_preview else ''}
+            </div>
         </article>
         '''
     
@@ -407,23 +775,36 @@ def generate_index_page(articles):
         featured_html = f'''
         <div class="featured-article">
             <span class="featured-label">⭐ Article en vedette</span>
+            <div class="featured-meta">
+                <span class="featured-category">{featured['category']}</span>
+                <span>•</span>
+                <span>{format_date(featured['date'])}</span>
+                <span>•</span>
+                <span>⏱️ {featured['reading_time']} min</span>
+            </div>
             <h2>{featured['title']}</h2>
             <p>{featured['excerpt']}</p>
             <a href="articles/{featured['slug']}.html" class="read-more">Lire l'article complet</a>
         </div>
         '''
     
+    # Statistiques
+    total_articles = len(articles)
+    total_reading_time = sum(a['reading_time'] for a in articles)
+    all_categories = len(categories)
+    
     html = f'''<!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CyberInsight - Blog de Cybersécurité</title>
+    <meta name="description" content="Explorez les dernières menaces, vulnérabilités et techniques de protection dans le monde de la sécurité informatique">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {{
+        :root[data-theme="dark"] {{
             --color-bg: #0a0e17;
             --color-surface: #151922;
             --color-surface-elevated: #1e232e;
@@ -433,6 +814,21 @@ def generate_index_page(articles):
             --color-text: #e8ecf3;
             --color-text-muted: #8b92a8;
             --color-border: #2a3142;
+        }}
+
+        :root[data-theme="light"] {{
+            --color-bg: #ffffff;
+            --color-surface: #f8f9fa;
+            --color-surface-elevated: #ffffff;
+            --color-primary: #00a870;
+            --color-secondary: #0088cc;
+            --color-accent: #e91e63;
+            --color-text: #1a1a1a;
+            --color-text-muted: #6c757d;
+            --color-border: #dee2e6;
+        }}
+
+        :root {{
             --font-display: 'JetBrains Mono', monospace;
             --font-body: 'Poppins', sans-serif;
             --shadow-glow: 0 0 30px rgba(0, 245, 160, 0.15);
@@ -447,6 +843,7 @@ def generate_index_page(articles):
             color: var(--color-text);
             line-height: 1.7;
             overflow-x: hidden;
+            transition: background 0.3s ease, color 0.3s ease;
         }}
 
         body::before {{
@@ -461,6 +858,12 @@ def generate_index_page(articles):
                 radial-gradient(circle at 80% 80%, rgba(0, 217, 255, 0.05) 0%, transparent 50%);
             pointer-events: none;
             z-index: 0;
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }}
+
+        [data-theme="light"] body::before {{
+            opacity: 0.2;
         }}
 
         .container {{
@@ -478,8 +881,9 @@ def generate_index_page(articles):
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(10, 14, 23, 0.8);
+            background: var(--color-bg);
             animation: slideDown 0.6s ease-out;
+            transition: all 0.3s ease;
         }}
 
         @keyframes slideDown {{
@@ -520,6 +924,7 @@ def generate_index_page(articles):
         nav {{
             display: flex;
             gap: 2.5rem;
+            align-items: center;
         }}
 
         nav a {{
@@ -548,6 +953,58 @@ def generate_index_page(articles):
 
         nav a:hover::after {{
             width: 100%;
+        }}
+
+        /* Theme Toggle */
+        .theme-toggle {{
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 50px;
+            padding: 0.5rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .theme-toggle:hover {{
+            border-color: var(--color-primary);
+            transform: rotate(180deg);
+        }}
+
+        /* Stats Bar */
+        .stats-bar {{
+            padding: 1.5rem 0;
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            flex-wrap: wrap;
+            border-bottom: 1px solid var(--color-border);
+            animation: fadeInUp 0.8s ease-out 0.1s both;
+        }}
+
+        .stat {{
+            text-align: center;
+        }}
+
+        .stat-number {{
+            font-size: 2rem;
+            font-weight: 700;
+            font-family: var(--font-display);
+            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }}
+
+        .stat-label {{
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            margin-top: 0.3rem;
         }}
 
         /* Search and Filter Section */
@@ -695,6 +1152,7 @@ def generate_index_page(articles):
             font-size: 0.85rem;
             color: var(--color-primary);
             transition: all 0.3s ease;
+            cursor: default;
         }}
 
         .tag:hover {{
@@ -739,6 +1197,8 @@ def generate_index_page(articles):
             transition: all 0.4s ease;
             position: relative;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }}
 
         .article-card::before {{
@@ -771,12 +1231,19 @@ def generate_index_page(articles):
             font-size: 0.85rem;
             color: var(--color-text-muted);
             font-family: var(--font-display);
+            flex-wrap: wrap;
         }}
 
         .article-category {{
             color: var(--color-primary);
             text-transform: uppercase;
             letter-spacing: 0.05em;
+        }}
+
+        .reading-time {{
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
         }}
 
         .article-card h3 {{
@@ -795,6 +1262,20 @@ def generate_index_page(articles):
             color: var(--color-text-muted);
             margin-bottom: 1.5rem;
             line-height: 1.6;
+            flex-grow: 1;
+        }}
+
+        .article-card-footer {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }}
+
+        .tags-preview {{
+            color: var(--color-text-muted);
+            font-size: 0.85rem;
+            font-family: var(--font-display);
         }}
 
         .read-more {{
@@ -806,6 +1287,7 @@ def generate_index_page(articles):
             font-weight: 600;
             font-size: 0.9rem;
             transition: gap 0.3s ease;
+            white-space: nowrap;
         }}
 
         .read-more:hover {{
@@ -840,7 +1322,22 @@ def generate_index_page(articles):
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+        }}
+
+        .featured-meta {{
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            font-family: var(--font-display);
             margin-bottom: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }}
+
+        .featured-category {{
+            color: var(--color-primary);
+            text-transform: uppercase;
         }}
 
         .featured-article h2 {{
@@ -855,6 +1352,36 @@ def generate_index_page(articles):
             margin-bottom: 2rem;
         }}
 
+        /* Back to Top Button */
+        .back-to-top {{
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 50px;
+            height: 50px;
+            background: var(--color-primary);
+            color: var(--color-bg);
+            border: none;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 245, 160, 0.3);
+        }}
+
+        .back-to-top.visible {{
+            opacity: 1;
+            pointer-events: all;
+        }}
+
+        .back-to-top:hover {{
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 245, 160, 0.4);
+        }}
+
         footer {{
             border-top: 1px solid var(--color-border);
             padding: 3rem 0;
@@ -866,12 +1393,21 @@ def generate_index_page(articles):
         @media (max-width: 768px) {{
             .hero h1 {{ font-size: 2.5rem; }}
             .hero p {{ font-size: 1.1rem; }}
-            nav {{ gap: 1.5rem; }}
+            nav {{ gap: 1rem; }}
+            nav a {{ font-size: 0.85rem; }}
             .articles-grid {{ grid-template-columns: 1fr; }}
             .featured-article {{ padding: 2rem; }}
             .featured-article h2 {{ font-size: 1.8rem; }}
             .search-filter-section {{ padding: 1.5rem 0; }}
             .category-filters {{ gap: 0.5rem; }}
+            .stats-bar {{ gap: 1.5rem; }}
+            .stat-number {{ font-size: 1.5rem; }}
+            .back-to-top {{
+                bottom: 1rem;
+                right: 1rem;
+                width: 45px;
+                height: 45px;
+            }}
         }}
     </style>
 </head>
@@ -883,12 +1419,30 @@ def generate_index_page(articles):
                 <nav>
                     <a href="#articles">Articles</a>
                     <a href="https://github.com/voidsponge" target="_blank">GitHub</a>
+                    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                        <span id="themeIcon">🌙</span>
+                    </button>
                 </nav>
             </div>
         </div>
     </header>
 
     <main>
+        <section class="stats-bar">
+            <div class="stat">
+                <div class="stat-number">{total_articles}</div>
+                <div class="stat-label">Articles</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">{all_categories}</div>
+                <div class="stat-label">Catégories</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">{total_reading_time}</div>
+                <div class="stat-label">Minutes de lecture</div>
+            </div>
+        </section>
+
         <section class="hero">
             <div class="container">
                 <h1><span class="gradient-text">Décryptage de la Cybersécurité</span></h1>
@@ -936,6 +1490,8 @@ def generate_index_page(articles):
         </section>
     </main>
 
+    <button class="back-to-top" id="backToTop" aria-label="Retour en haut">↑</button>
+
     <footer>
         <div class="container">
             <p>&copy; 2025 CyberInsight. Tous droits réservés.</p>
@@ -943,7 +1499,29 @@ def generate_index_page(articles):
     </footer>
 
     <script>
-        // Recherche
+        // Theme Toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const html = document.documentElement;
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        html.setAttribute('data-theme', savedTheme);
+        updateThemeIcon(savedTheme);
+
+        themeToggle.addEventListener('click', () => {{
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+        }});
+
+        function updateThemeIcon(theme) {{
+            themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
+        }}
+
+        // Search
         const searchInput = document.getElementById('searchInput');
         const articlesGrid = document.getElementById('articlesGrid');
         const noResults = document.getElementById('noResults');
@@ -978,9 +1556,7 @@ def generate_index_page(articles):
 
         filterButtons.forEach(button => {{
             button.addEventListener('click', function() {{
-                // Retirer la classe active de tous les boutons
                 filterButtons.forEach(btn => btn.classList.remove('active'));
-                // Ajouter la classe active au bouton cliqué
                 this.classList.add('active');
 
                 const category = this.getAttribute('data-category');
@@ -997,9 +1573,26 @@ def generate_index_page(articles):
                     }}
                 }});
 
-                // Réinitialiser la recherche
                 searchInput.value = '';
                 noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+            }});
+        }});
+
+        // Back to Top
+        const backToTop = document.getElementById('backToTop');
+
+        window.addEventListener('scroll', () => {{
+            if (window.pageYOffset > 300) {{
+                backToTop.classList.add('visible');
+            }} else {{
+                backToTop.classList.remove('visible');
+            }}
+        }});
+
+        backToTop.addEventListener('click', () => {{
+            window.scrollTo({{
+                top: 0,
+                behavior: 'smooth'
             }});
         }});
     </script>
@@ -1010,7 +1603,7 @@ def generate_index_page(articles):
 
 def main():
     """Fonction principale"""
-    print("🚀 Génération du blog CyberInsight...")
+    print("🚀 Génération du blog CyberInsight amélioré...")
     
     # Créer les dossiers de sortie
     OUTPUT_DIR.mkdir(exist_ok=True)
@@ -1026,7 +1619,7 @@ def main():
                 articles.append(article)
                 
                 # Générer la page de l'article
-                article_html = generate_article_page(article)
+                article_html = generate_article_page(article, articles)
                 output_path = ARTICLES_OUTPUT / f"{article['slug']}.html"
                 output_path.write_text(article_html, encoding='utf-8')
     
@@ -1038,6 +1631,7 @@ def main():
     (OUTPUT_DIR / "index.html").write_text(index_html, encoding='utf-8')
     
     print("✨ Blog généré avec succès dans le dossier _site/")
+    print(f"📊 Statistiques : {len(articles)} articles, {sum(a['reading_time'] for a in articles)} min de lecture totales")
 
 if __name__ == "__main__":
     main()
