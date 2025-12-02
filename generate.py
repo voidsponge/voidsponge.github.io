@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
-Générateur de blog CyberInsight - Style MODERNE CYBERSEC
-Design élégant avec Matrix subtile en background
+Générateur de blog statique pour CyberInsight - Version Améliorée
+Lit tous les articles markdown du dossier _articles/ et génère le site dans _site/
 """
 
 import os
 import re
+import json
 import markdown
 from pathlib import Path
 from datetime import datetime
-from xml.etree.ElementTree import Element, SubElement, tostring
-from xml.dom import minidom
 
 # Dossiers
 ARTICLES_DIR = Path("_articles")
@@ -18,7 +17,7 @@ OUTPUT_DIR = Path("_site")
 ARTICLES_OUTPUT = OUTPUT_DIR / "articles"
 
 def parse_frontmatter(content):
-    """Parse le frontmatter YAML"""
+    """Parse le frontmatter YAML d'un article"""
     frontmatter = {}
     
     if content.startswith('---'):
@@ -37,1226 +36,1492 @@ def parse_frontmatter(content):
     return frontmatter, content
 
 def estimate_reading_time(text):
-    """Estime le temps de lecture"""
+    """Estime le temps de lecture (mots par minute)"""
     words = len(re.findall(r'\w+', text))
-    minutes = max(1, round(words / 200))
+    minutes = max(1, round(words / 200))  # 200 mots par minute
     return minutes
 
 def load_article(filepath):
-    """Charge et parse un article"""
+    """Charge un article markdown et extrait les métadonnées"""
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
     
     frontmatter, markdown_content = parse_frontmatter(content)
-    html_content = markdown.markdown(markdown_content, extensions=['fenced_code', 'codehilite'])
     
+    # Extraire le titre du markdown si pas dans frontmatter
+    if 'title' not in frontmatter:
+        title_match = re.search(r'^#\s+(.+)$', markdown_content, re.MULTILINE)
+        if title_match:
+            frontmatter['title'] = title_match.group(1)
+    
+    # Générer un slug depuis le nom de fichier
     slug = filepath.stem
     
-    article = {
-        'slug': slug,
-        'title': frontmatter.get('title', 'Sans titre'),
-        'date': frontmatter.get('date', '2025-01-01'),
-        'category': frontmatter.get('category', 'General'),
-        'tags': [t.strip() for t in frontmatter.get('tags', '').split(',') if t.strip()],
-        'excerpt': frontmatter.get('excerpt', ''),
-        'content': html_content,
-        'reading_time': estimate_reading_time(markdown_content),
-        'series': frontmatter.get('series', ''),
-        'series_part': int(frontmatter.get('series_part', 0)) if frontmatter.get('series_part') else 0
-    }
+    # Convertir le markdown en HTML
+    md = markdown.Markdown(extensions=['extra', 'codehilite', 'fenced_code', 'tables', 'toc'])
+    html_content = md.convert(markdown_content)
     
-    return article
+    # Extraire un excerpt des premiers 200 caractères
+    plain_text = re.sub('<[^<]+?>', '', html_content)
+    excerpt = plain_text[:200].strip() + '...' if len(plain_text) > 200 else plain_text
+    
+    # Calculer le temps de lecture
+    reading_time = estimate_reading_time(plain_text)
+    
+    # Parser les tags s'ils existent
+    tags = []
+    if 'tags' in frontmatter:
+        tags = [tag.strip() for tag in frontmatter['tags'].split(',')]
+    
+    return {
+        'title': frontmatter.get('title', 'Sans titre'),
+        'slug': slug,
+        'category': frontmatter.get('category', 'Général'),
+        'date': frontmatter.get('date', datetime.now().strftime('%Y-%m-%d')),
+        'author': frontmatter.get('author', 'CyberInsight'),
+        'excerpt': frontmatter.get('excerpt', excerpt),
+        'content': html_content,
+        'reading_time': reading_time,
+        'tags': tags,
+        'filepath': filepath
+    }
 
-def get_related_articles(article, all_articles, limit=3):
-    """Trouve les articles liés"""
-    scored_articles = []
+def format_date(date_str):
+    """Formate une date en français"""
+    try:
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        months = {
+            1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril', 5: 'Mai', 6: 'Juin',
+            7: 'Juillet', 8: 'Août', 9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'
+        }
+        return f"{date_obj.day} {months[date_obj.month]} {date_obj.year}"
+    except:
+        return date_str
+
+def get_related_articles(article, all_articles, max_related=3):
+    """Trouve les articles liés par catégorie et tags"""
+    related = []
     
     for other in all_articles:
         if other['slug'] == article['slug']:
             continue
         
+        # Score de similarité
         score = 0
         if other['category'] == article['category']:
             score += 3
         
-        common_tags = set(article['tags']) & set(other['tags'])
+        # Tags communs
+        common_tags = set(article['tags']).intersection(set(other['tags']))
         score += len(common_tags) * 2
         
-        if article.get('series') and other.get('series') == article['series']:
-            score += 10
-        
         if score > 0:
-            scored_articles.append((score, other))
+            related.append((score, other))
     
-    scored_articles.sort(reverse=True, key=lambda x: x[0])
-    return [a[1] for a in scored_articles[:limit]]
+    # Trier par score et retourner les meilleurs
+    related.sort(reverse=True, key=lambda x: x[0])
+    return [r[1] for r in related[:max_related]]
 
 def generate_article_page(article, all_articles):
-    """Génère la page HTML d'un article"""
+    """Génère une page HTML pour un article"""
+    
+    # Articles liés
     related_articles = get_related_articles(article, all_articles)
+    related_html = ''
     
-    related_html = ""
-    for related in related_articles:
-        related_html += f"""
-        <article class="related-card">
-            <h4><a href="/articles/{related['slug']}.html">{related['title']}</a></h4>
-            <div class="related-meta">
-                <span class="category-badge">{related['category']}</span>
-                <span>⏱ {related['reading_time']} min</span>
+    if related_articles:
+        related_cards = ''
+        for related in related_articles:
+            related_cards += f'''
+            <a href="{related['slug']}.html" class="related-card">
+                <div class="related-category">{related['category']}</div>
+                <h4>{related['title']}</h4>
+                <p>{related['excerpt'][:100]}...</p>
+            </a>
+            '''
+        
+        related_html = f'''
+        <section class="related-articles">
+            <h3>📚 Articles liés</h3>
+            <div class="related-grid">
+                {related_cards}
             </div>
-        </article>
-        """
+        </section>
+        '''
     
-    tags_html = ""
-    for tag in article['tags']:
-        tags_html += f'<span class="tag">#{tag}</span>'
+    # Tags HTML
+    tags_html = ''
+    if article['tags']:
+        tags_items = ''.join([f'<span class="article-tag">#{tag}</span>' for tag in article['tags']])
+        tags_html = f'<div class="article-tags">{tags_items}</div>'
     
-    html = """<!DOCTYPE html>
+    html = f'''<!DOCTYPE html>
 <html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title} - CyberInsight</title>
+    <title>{article['title']} - CyberInsight</title>
+    <meta name="description" content="{article['excerpt'][:150]}">
+    <meta property="og:title" content="{article['title']}">
+    <meta property="og:description" content="{article['excerpt'][:150]}">
+    <meta property="og:type" content="article">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-
         :root[data-theme="dark"] {{
-            --bg-primary: #0a0e1a;
-            --bg-secondary: #131824;
-            --bg-tertiary: #1a1f2e;
-            --text-primary: #e2e8f0;
-            --text-secondary: #94a3b8;
-            --text-muted: #64748b;
-            --accent: #06d6a0;
-            --accent-dark: #048a6b;
-            --border: #1e293b;
-            --shadow: rgba(0, 0, 0, 0.3);
+            --color-bg: #0a0e17;
+            --color-surface: #151922;
+            --color-surface-elevated: #1e232e;
+            --color-primary: #00f5a0;
+            --color-secondary: #00d9ff;
+            --color-accent: #ff006e;
+            --color-text: #e8ecf3;
+            --color-text-muted: #8b92a8;
+            --color-border: #2a3142;
         }}
 
         :root[data-theme="light"] {{
-            --bg-primary: #ffffff;
-            --bg-secondary: #f8fafc;
-            --bg-tertiary: #f1f5f9;
-            --text-primary: #1e293b;
-            --text-secondary: #475569;
-            --text-muted: #64748b;
-            --accent: #06d6a0;
-            --accent-dark: #048a6b;
-            --border: #e2e8f0;
-            --shadow: rgba(0, 0, 0, 0.1);
+            --color-bg: #ffffff;
+            --color-surface: #f8f9fa;
+            --color-surface-elevated: #ffffff;
+            --color-primary: #00a870;
+            --color-secondary: #0088cc;
+            --color-accent: #e91e63;
+            --color-text: #1a1a1a;
+            --color-text-muted: #6c757d;
+            --color-border: #dee2e6;
         }}
 
+        :root {{
+            --font-display: 'JetBrains Mono', monospace;
+            --font-body: 'Poppins', sans-serif;
+        }}
+
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+
         body {{
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.7;
-            overflow-x: hidden;
+            font-family: var(--font-body);
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.8;
             transition: background 0.3s ease, color 0.3s ease;
         }}
 
-        /* MATRIX BACKGROUND SUBTIL */
-        #matrix-canvas {{
+        body::before {{
+            content: '';
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 0;
-            opacity: 0.03;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(0, 245, 160, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(0, 217, 255, 0.05) 0%, transparent 50%);
             pointer-events: none;
+            z-index: 0;
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }}
+
+        [data-theme="light"] body::before {{
+            opacity: 0.3;
         }}
 
         .container {{
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
-            padding: 2rem;
+            padding: 0 2rem;
             position: relative;
             z-index: 1;
         }}
 
-        /* HEADER */
         header {{
+            padding: 2rem 0;
+            border-bottom: 1px solid var(--color-border);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--color-bg);
+            transition: all 0.3s ease;
+        }}
+
+        .header-content {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 2rem 0 3rem 0;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 3rem;
         }}
 
         .logo {{
+            font-family: var(--font-display);
             font-size: 1.5rem;
             font-weight: 700;
-            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
         }}
 
-        .logo::before {{
-            content: '▸';
-            color: var(--accent);
-            font-size: 1.8rem;
-        }}
-
-        nav {{
+        .header-actions {{
             display: flex;
-            gap: 2rem;
+            gap: 1.5rem;
             align-items: center;
         }}
 
-        nav a {{
-            color: var(--text-secondary);
+        .back-link {{
+            color: var(--color-text-muted);
             text-decoration: none;
-            font-weight: 500;
-            transition: color 0.3s;
+            font-size: 0.95rem;
+            transition: color 0.3s ease;
         }}
 
-        nav a:hover {{
-            color: var(--accent);
-        }}
+        .back-link:hover {{ color: var(--color-primary); }}
 
+        /* Theme Toggle */
         .theme-toggle {{
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: 50%;
-            width: 36px;
-            height: 36px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 50px;
+            padding: 0.5rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            font-size: 1.1rem;
-            transition: all 0.3s;
         }}
 
         .theme-toggle:hover {{
-            border-color: var(--accent);
+            border-color: var(--color-primary);
             transform: rotate(180deg);
         }}
 
-        /* ARTICLE HEADER */
-        .article-header {{
-            margin-bottom: 3rem;
-        }}
+        article {{ padding: 4rem 0; }}
 
-        h1 {{
-            font-size: 2.5rem;
-            font-weight: 700;
-            line-height: 1.2;
-            margin-bottom: 1rem;
-            background: linear-gradient(135deg, var(--text-primary), var(--accent));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }}
+        .article-header {{ margin-bottom: 3rem; }}
 
         .article-meta {{
             display: flex;
             gap: 1.5rem;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            font-family: var(--font-display);
             flex-wrap: wrap;
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-            margin-top: 1rem;
         }}
 
         .category-badge {{
-            background: var(--accent);
-            color: var(--bg-primary);
-            padding: 0.4rem 0.9rem;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 0.85rem;
+            background: var(--color-primary);
+            color: var(--color-bg);
+            padding: 0.3rem 0.8rem;
+            border-radius: 4px;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
         }}
 
-        .tags {{
+        .reading-time {{
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }}
+
+        .article-title {{
+            font-size: 2.8rem;
+            line-height: 1.2;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }}
+
+        .article-tags {{
             display: flex;
             gap: 0.5rem;
             flex-wrap: wrap;
             margin-top: 1rem;
         }}
 
-        .tag {{
-            color: var(--accent);
-            background: var(--bg-secondary);
+        .article-tag {{
+            background: var(--color-surface-elevated);
+            color: var(--color-primary);
             padding: 0.3rem 0.8rem;
-            border-radius: 6px;
+            border-radius: 4px;
             font-size: 0.85rem;
-            border: 1px solid var(--border);
+            font-family: var(--font-display);
+            border: 1px solid var(--color-border);
         }}
 
-        /* CONTENT */
         .article-content {{
-            margin: 3rem 0;
-            font-size: 1.05rem;
+            font-size: 1.1rem;
+            line-height: 1.9;
         }}
 
+        .article-content h1,
+        .article-content h2,
+        .article-content h3 {{
+            color: var(--color-text);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-family: var(--font-display);
+        }}
+
+        .article-content h1 {{ font-size: 2.5rem; }}
         .article-content h2 {{
             font-size: 2rem;
-            margin: 3rem 0 1.5rem 0;
-            color: var(--text-primary);
-            font-weight: 700;
+            color: var(--color-primary);
+        }}
+        .article-content h3 {{ font-size: 1.5rem; }}
+
+        .article-content p {{ margin-bottom: 1.5rem; }}
+
+        .article-content ul,
+        .article-content ol {{
+            margin-left: 2rem;
+            margin-bottom: 1.5rem;
         }}
 
-        .article-content h3 {{
-            font-size: 1.5rem;
-            margin: 2rem 0 1rem 0;
-            color: var(--text-primary);
-            font-weight: 600;
-        }}
-
-        .article-content p {{
-            margin: 1.5rem 0;
-            color: var(--text-secondary);
-        }}
+        .article-content li {{ margin-bottom: 0.5rem; }}
 
         .article-content code {{
-            font-family: 'JetBrains Mono', monospace;
-            background: var(--bg-secondary);
+            font-family: var(--font-display);
+            background: var(--color-surface);
             padding: 0.2rem 0.5rem;
             border-radius: 4px;
+            color: var(--color-secondary);
             font-size: 0.9em;
-            color: var(--accent);
-            border: 1px solid var(--border);
         }}
 
         .article-content pre {{
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
             border-radius: 8px;
             padding: 1.5rem;
             overflow-x: auto;
-            margin: 2rem 0;
+            margin-bottom: 1.5rem;
         }}
 
         .article-content pre code {{
             background: none;
-            border: none;
             padding: 0;
-            color: var(--text-primary);
+            color: var(--color-text);
         }}
 
-        .article-content ul, .article-content ol {{
-            margin: 1.5rem 0;
-            padding-left: 2rem;
-            color: var(--text-secondary);
+        .article-content table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 2rem 0;
+            background: var(--color-surface);
+            border-radius: 8px;
+            overflow: hidden;
         }}
 
-        .article-content li {{
-            margin: 0.5rem 0;
+        .article-content th,
+        .article-content td {{
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--color-border);
         }}
 
-        .article-content a {{
-            color: var(--accent);
-            text-decoration: none;
-            border-bottom: 1px solid var(--accent);
-        }}
-
-        .article-content a:hover {{
-            color: var(--accent-dark);
-            border-bottom-color: var(--accent-dark);
+        .article-content th {{
+            background: var(--color-surface-elevated);
+            color: var(--color-primary);
+            font-family: var(--font-display);
+            font-weight: 700;
         }}
 
         .article-content blockquote {{
-            border-left: 3px solid var(--accent);
+            border-left: 4px solid var(--color-primary);
             padding-left: 1.5rem;
             margin: 2rem 0;
-            color: var(--text-muted);
+            color: var(--color-text-muted);
             font-style: italic;
         }}
 
-        /* RELATED ARTICLES */
-        .related-section {{
-            margin-top: 4rem;
-            padding-top: 3rem;
-            border-top: 1px solid var(--border);
+        .article-content a {{
+            color: var(--color-secondary);
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.3s ease;
         }}
 
-        .related-section h3 {{
-            font-size: 1.5rem;
-            margin-bottom: 1.5rem;
-            color: var(--text-primary);
+        .article-content a:hover {{
+            border-bottom-color: var(--color-secondary);
+        }}
+
+        .article-content hr {{
+            border: none;
+            border-top: 1px solid var(--color-border);
+            margin: 3rem 0;
+        }}
+
+        /* Share Buttons */
+        .share-section {{
+            margin: 3rem 0;
+            padding: 2rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            text-align: center;
+        }}
+
+        .share-section h4 {{
+            margin-bottom: 1rem;
+            font-family: var(--font-display);
+        }}
+
+        .share-buttons {{
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }}
+
+        .share-btn {{
+            padding: 0.7rem 1.5rem;
+            background: var(--color-surface-elevated);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            color: var(--color-text);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+
+        .share-btn:hover {{
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+        }}
+
+        /* Related Articles */
+        .related-articles {{
+            margin: 4rem 0;
+            padding-top: 3rem;
+            border-top: 1px solid var(--color-border);
+        }}
+
+        .related-articles h3 {{
+            font-family: var(--font-display);
+            font-size: 1.8rem;
+            margin-bottom: 2rem;
+        }}
+
+        .related-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1.5rem;
         }}
 
         .related-card {{
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
             padding: 1.5rem;
-            margin-bottom: 1rem;
-            transition: all 0.3s;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: block;
         }}
 
         .related-card:hover {{
-            border-color: var(--accent);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px var(--shadow);
+            border-color: var(--color-primary);
+            transform: translateY(-4px);
+        }}
+
+        .related-category {{
+            color: var(--color-primary);
+            font-size: 0.8rem;
+            font-family: var(--font-display);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
         }}
 
         .related-card h4 {{
+            color: var(--color-text);
             margin-bottom: 0.5rem;
             font-size: 1.1rem;
         }}
 
-        .related-card h4 a {{
-            color: var(--text-primary);
-            text-decoration: none;
+        .related-card p {{
+            color: var(--color-text-muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
         }}
 
-        .related-card h4 a:hover {{
-            color: var(--accent);
+        /* Back to Top Button */
+        .back-to-top {{
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 50px;
+            height: 50px;
+            background: var(--color-primary);
+            color: var(--color-bg);
+            border: none;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 245, 160, 0.3);
         }}
 
-        .related-meta {{
-            display: flex;
-            gap: 1rem;
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin-top: 0.5rem;
+        .back-to-top.visible {{
+            opacity: 1;
+            pointer-events: all;
         }}
 
-        /* BACK BUTTON */
-        .back-btn {{
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-top: 3rem;
-            padding: 0.8rem 1.5rem;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s;
-        }}
-
-        .back-btn:hover {{
-            border-color: var(--accent);
-            background: var(--bg-tertiary);
+        .back-to-top:hover {{
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 245, 160, 0.4);
         }}
 
         footer {{
-            margin-top: 4rem;
+            border-top: 1px solid var(--color-border);
             padding: 2rem 0;
-            border-top: 1px solid var(--border);
+            margin-top: 4rem;
             text-align: center;
-            color: var(--text-muted);
-            font-size: 0.9rem;
+            color: var(--color-text-muted);
         }}
 
-        /* RESPONSIVE */
         @media (max-width: 768px) {{
-            .container {{
-                padding: 1rem;
+            .article-title {{ font-size: 2rem; }}
+            .article-content {{ font-size: 1rem; }}
+            .related-grid {{ grid-template-columns: 1fr; }}
+            .back-to-top {{
+                bottom: 1rem;
+                right: 1rem;
+                width: 45px;
+                height: 45px;
             }}
-
-            h1 {{
-                font-size: 2rem;
-            }}
-
-            header {{
-                flex-direction: column;
-                gap: 1rem;
-                align-items: flex-start;
-            }}
-
-            nav {{
-                width: 100%;
-                justify-content: space-between;
-            }}
-        }}
-
-        /* SCROLLBAR */
-        ::-webkit-scrollbar {{
-            width: 10px;
-        }}
-
-        ::-webkit-scrollbar-track {{
-            background: var(--bg-secondary);
-        }}
-
-        ::-webkit-scrollbar-thumb {{
-            background: var(--accent);
-            border-radius: 5px;
-        }}
-
-        ::-webkit-scrollbar-thumb:hover {{
-            background: var(--accent-dark);
         }}
     </style>
 </head>
 <body>
-    <canvas id="matrix-canvas"></canvas>
-
-    <div class="container">
-        <header>
-            <a href="/" class="logo">CyberInsight</a>
-            <nav>
-                <a href="/">Articles</a>
-                <a href="https://github.com/voidsponge" target="_blank">GitHub</a>
-                <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
-                    <span id="themeIcon">🌙</span>
-                </button>
-            </nav>
-        </header>
-
-        <main>
-            <div class="article-header">
-                <h1>{title}</h1>
-                <div class="article-meta">
-                    <span class="category-badge">{category}</span>
-                    <span>📅 {date}</span>
-                    <span>⏱ {reading_time} min de lecture</span>
-                </div>
-                <div class="tags">
-                    {tags_html}
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <a href="../index.html" class="logo">CyberInsight</a>
+                <div class="header-actions">
+                    <a href="../index.html" class="back-link">← Retour</a>
+                    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                        <span id="themeIcon">🌙</span>
+                    </button>
                 </div>
             </div>
+        </div>
+    </header>
 
-            <article class="article-content">
-                {content}
+    <main>
+        <div class="container">
+            <article>
+                <div class="article-header">
+                    <div class="article-meta">
+                        <span class="category-badge">{article['category']}</span>
+                        <span>{format_date(article['date'])}</span>
+                        <span>•</span>
+                        <span>{article['author']}</span>
+                        <span>•</span>
+                        <span class="reading-time">⏱️ {article['reading_time']} min</span>
+                    </div>
+                    <h1 class="article-title">{article['title']}</h1>
+                    {tags_html}
+                </div>
+                
+                <div class="article-content">
+                    {article['content']}
+                </div>
+
+                <div class="share-section">
+                    <h4>📤 Partager cet article</h4>
+                    <div class="share-buttons">
+                        <a href="https://twitter.com/intent/tweet?text={article['title']}&url=https://voidsponge.github.io/articles/{article['slug']}.html" 
+                           target="_blank" 
+                           class="share-btn">
+                            𝕏 Twitter
+                        </a>
+                        <a href="https://www.linkedin.com/sharing/share-offsite/?url=https://voidsponge.github.io/articles/{article['slug']}.html" 
+                           target="_blank" 
+                           class="share-btn">
+                            in LinkedIn
+                        </a>
+                        <button onclick="copyLink()" class="share-btn">
+                            🔗 Copier le lien
+                        </button>
+                    </div>
+                </div>
+
+                {related_html}
             </article>
+        </div>
+    </main>
 
-            {related_section}
+    <button class="back-to-top" id="backToTop" aria-label="Retour en haut">↑</button>
 
-            <a href="/" class="back-btn">← Retour aux articles</a>
-        </main>
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 CyberInsight. Tous droits réservés.</p>
+        </div>
+    </footer>
 
-        <footer>
-            <p>&copy; 2025 CyberInsight - Blog de cybersécurité</p>
-        </footer>
-    </div>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script>
-        // MATRIX BACKGROUND SUBTIL
-        const canvas = document.getElementById('matrix-canvas');
-        const ctx = canvas.getContext('2d');
+        hljs.highlightAll();
 
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-
-        const characters = '01';
-        const fontSize = 14;
-        const columns = canvas.width / fontSize;
-        const drops = [];
-
-        for (let i = 0; i < columns; i++) {{
-            drops[i] = Math.random() * canvas.height / fontSize;
-        }}
-
-        function drawMatrix() {{
-            ctx.fillStyle = 'rgba(10, 14, 26, 0.05)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.fillStyle = '#06d6a0';
-            ctx.font = fontSize + 'px monospace';
-
-            for (let i = 0; i < drops.length; i++) {{
-                const text = characters[Math.floor(Math.random() * characters.length)];
-                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-
-                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {{
-                    drops[i] = 0;
-                }}
-
-                drops[i]++;
-            }}
-        }}
-
-        setInterval(drawMatrix, 50);
-
-        window.addEventListener('resize', () => {{
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }});
-
-        // THEME TOGGLE
+        // Theme Toggle
         const themeToggle = document.getElementById('themeToggle');
         const themeIcon = document.getElementById('themeIcon');
         const html = document.documentElement;
 
+        // Load saved theme
         const savedTheme = localStorage.getItem('theme') || 'dark';
         html.setAttribute('data-theme', savedTheme);
-        themeIcon.textContent = savedTheme === 'dark' ? '🌙' : '☀️';
+        updateThemeIcon(savedTheme);
 
         themeToggle.addEventListener('click', () => {{
             const currentTheme = html.getAttribute('data-theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             html.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
-            themeIcon.textContent = newTheme === 'dark' ? '🌙' : '☀️';
+            updateThemeIcon(newTheme);
         }});
+
+        function updateThemeIcon(theme) {{
+            themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
+        }}
+
+        // Back to Top
+        const backToTop = document.getElementById('backToTop');
+
+        window.addEventListener('scroll', () => {{
+            if (window.pageYOffset > 300) {{
+                backToTop.classList.add('visible');
+            }} else {{
+                backToTop.classList.remove('visible');
+            }}
+        }});
+
+        backToTop.addEventListener('click', () => {{
+            window.scrollTo({{
+                top: 0,
+                behavior: 'smooth'
+            }});
+        }});
+
+        // Copy Link
+        function copyLink() {{
+            navigator.clipboard.writeText(window.location.href);
+            alert('✅ Lien copié dans le presse-papiers !');
+        }}
     </script>
 </body>
-</html>""".format(
-        title=article['title'],
-        category=article['category'],
-        date=article['date'],
-        reading_time=article['reading_time'],
-        tags_html=tags_html,
-        content=article['content'],
-        related_section=f'<div class="related-section"><h3>Articles liés</h3>{related_html}</div>' if related_html else ''
-    )
+</html>'''
     
     return html
 
 def generate_index_page(articles):
-    """Génère la page d'accueil moderne"""
-    total_articles = len(articles)
-    all_categories = sorted(set(a['category'] for a in articles))
-    total_reading_time = sum(a['reading_time'] for a in articles)
+    """Génère la page d'accueil avec toutes les améliorations"""
     
-    # Featured article (premier)
-    featured = articles[0] if articles else None
-    featured_html = ""
-    if featured:
-        featured_tags = " ".join([f'<span class="tag">#{tag}</span>' for tag in featured['tags'][:3]])
-        featured_html = f"""
-        <div class="featured-article">
-            <span class="featured-badge">⭐ À la une</span>
-            <h2><a href="/articles/{featured['slug']}.html">{featured['title']}</a></h2>
-            <p>{featured['excerpt']}</p>
-            <div class="featured-meta">
-                <span class="category-badge">{featured['category']}</span>
-                <span>📅 {featured['date']}</span>
-                <span>⏱ {featured['reading_time']} min</span>
-            </div>
-            <div class="tags">{featured_tags}</div>
-        </div>
-        """
+    # Trier par date (plus récent en premier)
+    articles_sorted = sorted(articles, key=lambda x: x['date'], reverse=True)
     
-    # Articles grid
-    articles_html = ""
-    for article in articles[1:]:  # Skip featured
-        tags_html = " ".join([f'<span class="tag">#{tag}</span>' for tag in article['tags'][:3]])
+    # Article en vedette (le plus récent)
+    featured = articles_sorted[0] if articles_sorted else None
+    
+    # Extraire les catégories uniques
+    categories = sorted(set(article['category'] for article in articles_sorted))
+    
+    # Générer les boutons de filtre de catégories
+    category_filters = ''
+    for category in categories:
+        category_filters += f'<button class="filter-btn" data-category="{category}">{category}</button>\n                    '
+    
+    # Générer les cartes d'articles avec temps de lecture
+    articles_html = ''
+    for article in articles_sorted:
+        tags_preview = ''
+        if article['tags']:
+            tags_preview = ' '.join([f'#{tag}' for tag in article['tags'][:3]])
         
-        articles_html += f"""
-        <article class="article-card">
-            <div class="card-header">
-                <span class="category-badge">{article['category']}</span>
-                <span class="date">{article['date']}</span>
+        articles_html += f'''
+        <article class="article-card" data-category="{article['category']}">
+            <div class="article-meta">
+                <span class="article-category">{article['category']}</span>
+                <span>•</span>
+                <span>{format_date(article['date'])}</span>
+                <span>•</span>
+                <span class="reading-time">⏱️ {article['reading_time']} min</span>
             </div>
-            <h3><a href="/articles/{article['slug']}.html">{article['title']}</a></h3>
-            <p class="excerpt">{article['excerpt']}</p>
-            <div class="card-footer">
-                <div class="tags">{tags_html}</div>
-                <span class="reading-time">⏱ {article['reading_time']} min</span>
+            <h3>{article['title']}</h3>
+            <p class="article-excerpt">{article['excerpt']}</p>
+            <div class="article-card-footer">
+                <a href="articles/{article['slug']}.html" class="read-more">Lire plus</a>
+                {f'<div class="tags-preview">{tags_preview}</div>' if tags_preview else ''}
             </div>
         </article>
-        """
+        '''
     
-    # Category filters
-    category_filters = '<button class="filter-btn active" data-category="all">Tous</button>'
-    for cat in all_categories:
-        category_filters += f'<button class="filter-btn" data-category="{cat}">{cat}</button>'
+    featured_html = ''
+    if featured:
+        featured_html = f'''
+        <div class="featured-article">
+            <span class="featured-label">⭐ Article en vedette</span>
+            <div class="featured-meta">
+                <span class="featured-category">{featured['category']}</span>
+                <span>•</span>
+                <span>{format_date(featured['date'])}</span>
+                <span>•</span>
+                <span>⏱️ {featured['reading_time']} min</span>
+            </div>
+            <h2>{featured['title']}</h2>
+            <p>{featured['excerpt']}</p>
+            <a href="articles/{featured['slug']}.html" class="read-more">Lire l'article complet</a>
+        </div>
+        '''
     
-    html_template = """<!DOCTYPE html>
+    # Statistiques
+    total_articles = len(articles)
+    total_reading_time = sum(a['reading_time'] for a in articles)
+    all_categories = len(categories)
+    
+    html = f'''<!DOCTYPE html>
 <html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CyberInsight - Blog de Cybersécurité</title>
+    <meta name="description" content="Explorez les dernières menaces, vulnérabilités et techniques de protection dans le monde de la sécurité informatique">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-
         :root[data-theme="dark"] {{
-            --bg-primary: #0a0e1a;
-            --bg-secondary: #131824;
-            --bg-tertiary: #1a1f2e;
-            --text-primary: #e2e8f0;
-            --text-secondary: #94a3b8;
-            --text-muted: #64748b;
-            --accent: #06d6a0;
-            --accent-dark: #048a6b;
-            --border: #1e293b;
-            --shadow: rgba(0, 0, 0, 0.3);
+            --color-bg: #0a0e17;
+            --color-surface: #151922;
+            --color-surface-elevated: #1e232e;
+            --color-primary: #00f5a0;
+            --color-secondary: #00d9ff;
+            --color-accent: #ff006e;
+            --color-text: #e8ecf3;
+            --color-text-muted: #8b92a8;
+            --color-border: #2a3142;
         }}
 
         :root[data-theme="light"] {{
-            --bg-primary: #ffffff;
-            --bg-secondary: #f8fafc;
-            --bg-tertiary: #f1f5f9;
-            --text-primary: #1e293b;
-            --text-secondary: #475569;
-            --text-muted: #64748b;
-            --accent: #06d6a0;
-            --accent-dark: #048a6b;
-            --border: #e2e8f0;
-            --shadow: rgba(0, 0, 0, 0.1);
+            --color-bg: #ffffff;
+            --color-surface: #f8f9fa;
+            --color-surface-elevated: #ffffff;
+            --color-primary: #00a870;
+            --color-secondary: #0088cc;
+            --color-accent: #e91e63;
+            --color-text: #1a1a1a;
+            --color-text-muted: #6c757d;
+            --color-border: #dee2e6;
         }}
 
+        :root {{
+            --font-display: 'JetBrains Mono', monospace;
+            --font-body: 'Poppins', sans-serif;
+            --shadow-glow: 0 0 30px rgba(0, 245, 160, 0.15);
+            --shadow-strong: 0 20px 50px rgba(0, 0, 0, 0.5);
+        }}
+
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+
         body {{
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
+            font-family: var(--font-body);
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.7;
             overflow-x: hidden;
             transition: background 0.3s ease, color 0.3s ease;
         }}
 
-        /* MATRIX BACKGROUND SUBTIL */
-        #matrix-canvas {{
+        body::before {{
+            content: '';
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 0;
-            opacity: 0.03;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(0, 245, 160, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(0, 217, 255, 0.05) 0%, transparent 50%);
             pointer-events: none;
+            z-index: 0;
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }}
+
+        [data-theme="light"] body::before {{
+            opacity: 0.2;
         }}
 
         .container {{
             max-width: 1200px;
             margin: 0 auto;
-            padding: 2rem;
+            padding: 0 2rem;
             position: relative;
             z-index: 1;
         }}
 
-        /* HEADER */
         header {{
+            padding: 2rem 0;
+            border-bottom: 1px solid var(--color-border);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--color-bg);
+            animation: slideDown 0.6s ease-out;
+            transition: all 0.3s ease;
+        }}
+
+        @keyframes slideDown {{
+            from {{ transform: translateY(-100%); opacity: 0; }}
+            to {{ transform: translateY(0); opacity: 1; }}
+        }}
+
+        .header-content {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 2rem 0;
-            margin-bottom: 3rem;
         }}
 
         .logo {{
-            font-size: 2rem;
+            font-family: var(--font-display);
+            font-size: 1.8rem;
             font-weight: 700;
-            color: var(--text-primary);
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+            position: relative;
         }}
 
         .logo::before {{
-            content: '▸';
-            color: var(--accent);
-            font-size: 2.5rem;
+            content: '> ';
+            color: var(--color-accent);
+            -webkit-text-fill-color: var(--color-accent);
+            animation: blink 1.5s infinite;
+        }}
+
+        @keyframes blink {{
+            0%, 49% {{ opacity: 1; }}
+            50%, 100% {{ opacity: 0; }}
         }}
 
         nav {{
             display: flex;
-            gap: 2rem;
+            gap: 2.5rem;
             align-items: center;
         }}
 
         nav a {{
-            color: var(--text-secondary);
+            color: var(--color-text-muted);
             text-decoration: none;
             font-weight: 500;
-            transition: color 0.3s;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            position: relative;
+        }}
+
+        nav a::after {{
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--color-primary);
+            transition: width 0.3s ease;
         }}
 
         nav a:hover {{
-            color: var(--accent);
+            color: var(--color-primary);
         }}
 
+        nav a:hover::after {{
+            width: 100%;
+        }}
+
+        /* Theme Toggle */
         .theme-toggle {{
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: 50%;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 50px;
+            padding: 0.5rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
             width: 40px;
             height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            font-size: 1.2rem;
-            transition: all 0.3s;
         }}
 
         .theme-toggle:hover {{
-            border-color: var(--accent);
+            border-color: var(--color-primary);
             transform: rotate(180deg);
         }}
 
-        /* HERO */
-        .hero {{
-            text-align: center;
-            padding: 4rem 0;
-            margin-bottom: 3rem;
+        /* Stats Bar */
+        .stats-bar {{
+            padding: 1.5rem 0;
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            flex-wrap: wrap;
+            border-bottom: 1px solid var(--color-border);
+            animation: fadeInUp 0.8s ease-out 0.1s both;
         }}
 
-        .hero h1 {{
-            font-size: 3.5rem;
+        .stat {{
+            text-align: center;
+        }}
+
+        .stat-number {{
+            font-size: 2rem;
             font-weight: 700;
-            margin-bottom: 1rem;
-            background: linear-gradient(135deg, var(--text-primary), var(--accent));
+            font-family: var(--font-display);
+            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-        }}
-
-        .hero p {{
-            font-size: 1.3rem;
-            color: var(--text-secondary);
-            max-width: 600px;
-            margin: 0 auto;
-        }}
-
-        /* STATS */
-        .stats {{
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 2rem;
-            margin-bottom: 4rem;
-        }}
-
-        .stat-card {{
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 2rem;
-            text-align: center;
-            transition: all 0.3s;
-        }}
-
-        .stat-card:hover {{
-            border-color: var(--accent);
-            transform: translateY(-5px);
-            box-shadow: 0 8px 20px var(--shadow);
-        }}
-
-        .stat-value {{
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: var(--accent);
-            display: block;
+            background-clip: text;
         }}
 
         .stat-label {{
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-            margin-top: 0.5rem;
-        }}
-
-        /* FEATURED ARTICLE */
-        .featured-article {{
-            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 3rem;
-            margin-bottom: 4rem;
-            position: relative;
-            overflow: hidden;
-        }}
-
-        .featured-article::before {{
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--accent), var(--accent-dark));
-        }}
-
-        .featured-badge {{
-            background: var(--accent);
-            color: var(--bg-primary);
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            font-weight: 600;
             font-size: 0.9rem;
-            display: inline-block;
-            margin-bottom: 1.5rem;
+            color: var(--color-text-muted);
+            margin-top: 0.3rem;
         }}
 
-        .featured-article h2 {{
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
+        /* Search and Filter Section */
+        .search-filter-section {{
+            padding: 2rem 0;
+            border-bottom: 1px solid var(--color-border);
+            animation: fadeInUp 0.8s ease-out 0.3s both;
         }}
 
-        .featured-article h2 a {{
-            color: var(--text-primary);
-            text-decoration: none;
-        }}
-
-        .featured-article h2 a:hover {{
-            color: var(--accent);
-        }}
-
-        .featured-article p {{
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-            margin-bottom: 1.5rem;
-            line-height: 1.7;
-        }}
-
-        .featured-meta {{
+        .search-bar {{
             display: flex;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-            margin-bottom: 1rem;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            align-items: center;
         }}
 
-        /* FILTERS */
-        .filters {{
+        .search-input {{
+            flex: 1;
+            padding: 1rem 1.5rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            color: var(--color-text);
+            font-family: var(--font-body);
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }}
+
+        .search-input:focus {{
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(0, 245, 160, 0.1);
+        }}
+
+        .search-input::placeholder {{
+            color: var(--color-text-muted);
+        }}
+
+        .category-filters {{
             display: flex;
             gap: 1rem;
             flex-wrap: wrap;
-            margin-bottom: 3rem;
+            justify-content: center;
         }}
 
         .filter-btn {{
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            padding: 0.7rem 1.5rem;
-            border-radius: 8px;
+            padding: 0.6rem 1.2rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            color: var(--color-text-muted);
+            font-family: var(--font-display);
+            font-size: 0.85rem;
             cursor: pointer;
-            font-family: 'Inter', sans-serif;
-            font-weight: 500;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }}
 
         .filter-btn:hover {{
-            border-color: var(--accent);
-            color: var(--accent);
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+            transform: translateY(-2px);
         }}
 
         .filter-btn.active {{
-            background: var(--accent);
-            color: var(--bg-primary);
-            border-color: var(--accent);
+            background: var(--color-primary);
+            color: var(--color-bg);
+            border-color: var(--color-primary);
+            box-shadow: var(--shadow-glow);
         }}
 
-        /* SEARCH */
-        .search-box {{
-            width: 100%;
-            max-width: 600px;
-            margin: 0 auto 3rem auto;
-            padding: 1rem 1.5rem;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            color: var(--text-primary);
-            font-family: 'Inter', sans-serif;
-            font-size: 1rem;
-            transition: all 0.3s;
+        .no-results {{
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--color-text-muted);
+            font-size: 1.2rem;
         }}
 
-        .search-box:focus {{
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1);
-        }}
-
-        .search-box::placeholder {{
-            color: var(--text-muted);
-        }}
-
-        /* ARTICLES GRID */
-        .articles-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 2rem;
-            margin-bottom: 4rem;
-        }}
-
-        .article-card {{
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 2rem;
-            transition: all 0.3s;
-        }}
-
-        .article-card:hover {{
-            border-color: var(--accent);
-            transform: translateY(-5px);
-            box-shadow: 0 8px 20px var(--shadow);
+        .no-results-icon {{
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
         }}
 
         .article-card.hidden {{
             display: none;
         }}
 
-        .card-header {{
+        .hero {{
+            padding: 6rem 0;
+            text-align: center;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }}
+
+        @keyframes fadeInUp {{
+            from {{ opacity: 0; transform: translateY(30px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+
+        .hero h1 {{
+            font-family: var(--font-display);
+            font-size: 4rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            line-height: 1.1;
+            letter-spacing: -0.03em;
+        }}
+
+        .hero h1 .gradient-text {{
+            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary), var(--color-accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            background-size: 200% 200%;
+            animation: gradientShift 5s ease infinite;
+        }}
+
+        @keyframes gradientShift {{
+            0%, 100% {{ background-position: 0% 50%; }}
+            50% {{ background-position: 100% 50%; }}
+        }}
+
+        .hero p {{
+            font-size: 1.3rem;
+            color: var(--color-text-muted);
+            max-width: 700px;
+            margin: 0 auto 2rem;
+        }}
+
+        .hero-tags {{
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }}
-
-        .category-badge {{
-            background: var(--accent);
-            color: var(--bg-primary);
-            padding: 0.4rem 0.9rem;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 0.85rem;
-        }}
-
-        .date {{
-            color: var(--text-muted);
-            font-size: 0.9rem;
-        }}
-
-        .article-card h3 {{
-            font-size: 1.4rem;
-            margin: 1rem 0;
-            line-height: 1.3;
-        }}
-
-        .article-card h3 a {{
-            color: var(--text-primary);
-            text-decoration: none;
-        }}
-
-        .article-card h3 a:hover {{
-            color: var(--accent);
-        }}
-
-        .excerpt {{
-            color: var(--text-secondary);
-            margin: 1rem 0;
-            line-height: 1.6;
-        }}
-
-        .card-footer {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 1.5rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--border);
-        }}
-
-        .tags {{
-            display: flex;
-            gap: 0.5rem;
+            gap: 1rem;
+            justify-content: center;
             flex-wrap: wrap;
+            margin-top: 2rem;
         }}
 
         .tag {{
-            color: var(--accent);
-            background: var(--bg-tertiary);
-            padding: 0.3rem 0.7rem;
+            padding: 0.5rem 1rem;
+            background: var(--color-surface-elevated);
+            border: 1px solid var(--color-border);
             border-radius: 6px;
-            font-size: 0.8rem;
-            border: 1px solid var(--border);
+            font-family: var(--font-display);
+            font-size: 0.85rem;
+            color: var(--color-primary);
+            transition: all 0.3s ease;
+            cursor: default;
+        }}
+
+        .tag:hover {{
+            background: var(--color-primary);
+            color: var(--color-bg);
+            border-color: var(--color-primary);
+            box-shadow: var(--shadow-glow);
+            transform: translateY(-2px);
+        }}
+
+        .articles-section {{
+            padding: 4rem 0;
+            animation: fadeInUp 0.8s ease-out 0.4s both;
+        }}
+
+        .section-title {{
+            font-family: var(--font-display);
+            font-size: 2rem;
+            margin-bottom: 3rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }}
+
+        .section-title::before {{
+            content: '#';
+            color: var(--color-accent);
+            font-size: 2.5rem;
+        }}
+
+        .articles-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 2rem;
+        }}
+
+        .article-card {{
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 2rem;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }}
+
+        .article-card::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.4s ease;
+        }}
+
+        .article-card:hover::before {{
+            transform: scaleX(1);
+        }}
+
+        .article-card:hover {{
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-strong);
+            border-color: var(--color-primary);
+        }}
+
+        .article-meta {{
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            font-family: var(--font-display);
+            flex-wrap: wrap;
+        }}
+
+        .article-category {{
+            color: var(--color-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }}
 
         .reading-time {{
-            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }}
+
+        .article-card h3 {{
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+            line-height: 1.3;
+            transition: color 0.3s ease;
+        }}
+
+        .article-card:hover h3 {{
+            color: var(--color-primary);
+        }}
+
+        .article-excerpt {{
+            color: var(--color-text-muted);
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+            flex-grow: 1;
+        }}
+
+        .article-card-footer {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }}
+
+        .tags-preview {{
+            color: var(--color-text-muted);
+            font-size: 0.85rem;
+            font-family: var(--font-display);
+        }}
+
+        .read-more {{
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--color-secondary);
+            text-decoration: none;
+            font-weight: 600;
             font-size: 0.9rem;
+            transition: gap 0.3s ease;
             white-space: nowrap;
         }}
 
-        /* NO RESULTS */
-        .no-results {{
-            text-align: center;
-            padding: 4rem;
-            color: var(--text-muted);
-            display: none;
+        .read-more:hover {{
+            gap: 1rem;
+        }}
+
+        .read-more::after {{
+            content: '→';
+            font-size: 1.2rem;
+        }}
+
+        .featured-article {{
+            background: linear-gradient(135deg, var(--color-surface-elevated), var(--color-surface));
+            border: 1px solid var(--color-primary);
+            border-radius: 16px;
+            padding: 3rem;
+            margin-bottom: 4rem;
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-glow);
+            animation: fadeInUp 0.8s ease-out 0.6s both;
+        }}
+
+        .featured-label {{
+            display: inline-block;
+            background: var(--color-accent);
+            color: var(--color-bg);
+            padding: 0.4rem 1rem;
+            border-radius: 6px;
+            font-family: var(--font-display);
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+        }}
+
+        .featured-meta {{
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            font-family: var(--font-display);
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }}
+
+        .featured-category {{
+            color: var(--color-primary);
+            text-transform: uppercase;
+        }}
+
+        .featured-article h2 {{
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            line-height: 1.2;
+        }}
+
+        .featured-article p {{
+            font-size: 1.1rem;
+            color: var(--color-text-muted);
+            margin-bottom: 2rem;
+        }}
+
+        /* Back to Top Button */
+        .back-to-top {{
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 50px;
+            height: 50px;
+            background: var(--color-primary);
+            color: var(--color-bg);
+            border: none;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 245, 160, 0.3);
+        }}
+
+        .back-to-top.visible {{
+            opacity: 1;
+            pointer-events: all;
+        }}
+
+        .back-to-top:hover {{
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 245, 160, 0.4);
         }}
 
         footer {{
-            margin-top: 4rem;
-            padding: 2rem 0;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid var(--color-border);
+            padding: 3rem 0;
+            margin-top: 6rem;
             text-align: center;
-            color: var(--text-muted);
+            color: var(--color-text-muted);
         }}
 
-        footer a {{
-            color: var(--accent);
-            text-decoration: none;
-        }}
-
-        footer a:hover {{
-            text-decoration: underline;
-        }}
-
-        /* RESPONSIVE */
         @media (max-width: 768px) {{
-            .hero h1 {{
-                font-size: 2.5rem;
+            .hero h1 {{ font-size: 2.5rem; }}
+            .hero p {{ font-size: 1.1rem; }}
+            nav {{ gap: 1rem; }}
+            nav a {{ font-size: 0.85rem; }}
+            .articles-grid {{ grid-template-columns: 1fr; }}
+            .featured-article {{ padding: 2rem; }}
+            .featured-article h2 {{ font-size: 1.8rem; }}
+            .search-filter-section {{ padding: 1.5rem 0; }}
+            .category-filters {{ gap: 0.5rem; }}
+            .stats-bar {{ gap: 1.5rem; }}
+            .stat-number {{ font-size: 1.5rem; }}
+            .back-to-top {{
+                bottom: 1rem;
+                right: 1rem;
+                width: 45px;
+                height: 45px;
             }}
-
-            .stats {{
-                grid-template-columns: 1fr;
-            }}
-
-            .articles-grid {{
-                grid-template-columns: 1fr;
-            }}
-
-            header {{
-                flex-direction: column;
-                gap: 1.5rem;
-                align-items: flex-start;
-            }}
-
-            nav {{
-                width: 100%;
-                justify-content: space-between;
-            }}
-
-            .featured-article {{
-                padding: 2rem;
-            }}
-
-            .featured-article h2 {{
-                font-size: 1.8rem;
-            }}
-        }}
-
-        /* SCROLLBAR */
-        ::-webkit-scrollbar {{
-            width: 10px;
-        }}
-
-        ::-webkit-scrollbar-track {{
-            background: var(--bg-secondary);
-        }}
-
-        ::-webkit-scrollbar-thumb {{
-            background: var(--accent);
-            border-radius: 5px;
-        }}
-
-        ::-webkit-scrollbar-thumb:hover {{
-            background: var(--accent-dark);
         }}
     </style>
 </head>
 <body>
-    <canvas id="matrix-canvas"></canvas>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">CyberInsight</div>
+                <nav>
+                    <a href="#articles">Articles</a>
+                    <a href="https://github.com/voidsponge" target="_blank">GitHub</a>
+                    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                        <span id="themeIcon">🌙</span>
+                    </button>
+                </nav>
+            </div>
+        </div>
+    </header>
 
-    <div class="container">
-        <header>
-            <a href="/" class="logo">CyberInsight</a>
-            <nav>
-                <a href="#articles">Articles</a>
-                <a href="https://github.com/voidsponge" target="_blank">GitHub</a>
-                <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
-                    <span id="themeIcon">🌙</span>
-                </button>
-            </nav>
-        </header>
-
-        <section class="hero">
-            <h1>CyberInsight</h1>
-            <p>Explorez le monde de la cybersécurité : Pentest, CTF, OSINT et plus encore</p>
+    <main>
+        <section class="stats-bar">
+            <div class="stat">
+                <div class="stat-number">{total_articles}</div>
+                <div class="stat-label">Articles</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">{all_categories}</div>
+                <div class="stat-label">Catégories</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">{total_reading_time}</div>
+                <div class="stat-label">Minutes de lecture</div>
+            </div>
         </section>
 
-        <div class="stats">
-            <div class="stat-card">
-                <span class="stat-value">{total_articles}</span>
-                <span class="stat-label">Articles</span>
+        <section class="hero">
+            <div class="container">
+                <h1><span class="gradient-text">Décryptage de la Cybersécurité</span></h1>
+                <p>Explorez les dernières menaces, vulnérabilités et techniques de protection dans le monde de la sécurité informatique</p>
+                <div class="hero-tags">
+                    <span class="tag">DevSecOps</span>
+                    <span class="tag">Forensic</span>
+                    <span class="tag">CTF</span>
+                    <span class="tag">Cheat</span>
+                    <span class="tag">OSINT</span>
+                    <span class="tag">Red Team / Blue Team</span>
+                </div>
             </div>
-            <div class="stat-card">
-                <span class="stat-value">{total_categories}</span>
-                <span class="stat-label">Catégories</span>
+        </section>
+
+        <section class="search-filter-section">
+            <div class="container">
+                <div class="search-bar">
+                    <input type="text" 
+                           id="searchInput" 
+                           class="search-input" 
+                           placeholder="🔍 Rechercher un article...">
+                </div>
+                <div class="category-filters" id="categoryFilters">
+                    <button class="filter-btn active" data-category="all">Tous</button>
+                    {category_filters}
+                </div>
             </div>
-            <div class="stat-card">
-                <span class="stat-value">{total_reading_time}</span>
-                <span class="stat-label">Minutes de lecture</span>
+        </section>
+
+        <section class="articles-section">
+            <div class="container">
+                {featured_html}
+
+                <h2 class="section-title" id="articles">Articles récents</h2>
+                
+                <div class="articles-grid" id="articlesGrid">
+                    {articles_html}
+                </div>
+                <div class="no-results" id="noResults" style="display: none;">
+                    <div class="no-results-icon">🔍</div>
+                    <p>Aucun article trouvé</p>
+                </div>
             </div>
+        </section>
+    </main>
+
+    <button class="back-to-top" id="backToTop" aria-label="Retour en haut">↑</button>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 CyberInsight. Tous droits réservés.</p>
         </div>
-
-        {featured_html}
-
-        <input type="text" id="searchInput" class="search-box" placeholder="🔍 Rechercher un article...">
-
-        <div class="filters" id="filters">
-            {category_filters}
-        </div>
-
-        <div class="articles-grid" id="articlesGrid">
-            {articles_html}
-        </div>
-
-        <div class="no-results" id="noResults">
-            <p>Aucun article trouvé</p>
-        </div>
-
-        <footer>
-            <p>&copy; 2025 CyberInsight - <a href="https://github.com/voidsponge" target="_blank">GitHub</a></p>
-        </footer>
-    </div>
+    </footer>
 
     <script>
-        // MATRIX BACKGROUND SUBTIL (juste des 0 et 1)
-        const canvas = document.getElementById('matrix-canvas');
-        const ctx = canvas.getContext('2d');
-
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-
-        const characters = '01';
-        const fontSize = 14;
-        const columns = canvas.width / fontSize;
-        const drops = [];
-
-        for (let i = 0; i < columns; i++) {{
-            drops[i] = Math.random() * canvas.height / fontSize;
-        }}
-
-        function drawMatrix() {{
-            ctx.fillStyle = 'rgba(10, 14, 26, 0.05)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.fillStyle = '#06d6a0';
-            ctx.font = fontSize + 'px monospace';
-
-            for (let i = 0; i < drops.length; i++) {{
-                const text = characters[Math.floor(Math.random() * characters.length)];
-                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-
-                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {{
-                    drops[i] = 0;
-                }}
-
-                drops[i]++;
-            }}
-        }}
-
-        setInterval(drawMatrix, 50);
-
-        window.addEventListener('resize', () => {{
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }});
-
-        // THEME TOGGLE
+        // Theme Toggle
         const themeToggle = document.getElementById('themeToggle');
         const themeIcon = document.getElementById('themeIcon');
         const html = document.documentElement;
 
+        // Load saved theme
         const savedTheme = localStorage.getItem('theme') || 'dark';
         html.setAttribute('data-theme', savedTheme);
-        themeIcon.textContent = savedTheme === 'dark' ? '🌙' : '☀️';
+        updateThemeIcon(savedTheme);
 
         themeToggle.addEventListener('click', () => {{
             const currentTheme = html.getAttribute('data-theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             html.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
-            themeIcon.textContent = newTheme === 'dark' ? '🌙' : '☀️';
+            updateThemeIcon(newTheme);
         }});
 
-        // SEARCH & FILTERS
+        function updateThemeIcon(theme) {{
+            themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
+        }}
+
+        // Search
         const searchInput = document.getElementById('searchInput');
         const articlesGrid = document.getElementById('articlesGrid');
         const noResults = document.getElementById('noResults');
@@ -1266,12 +1531,16 @@ def generate_index_page(articles):
             const searchTerm = this.value.toLowerCase();
             let visibleCount = 0;
 
-            articleCards.forEach(function(card) {{
+            articleCards.forEach(card => {{
                 const title = card.querySelector('h3').textContent.toLowerCase();
-                const excerpt = card.querySelector('.excerpt').textContent.toLowerCase();
-                const category = card.querySelector('.category-badge').textContent.toLowerCase();
+                const excerpt = card.querySelector('.article-excerpt').textContent.toLowerCase();
+                const category = card.querySelector('.article-category').textContent.toLowerCase();
                 
-                if (title.includes(searchTerm) || excerpt.includes(searchTerm) || category.includes(searchTerm)) {{
+                const matches = title.includes(searchTerm) || 
+                               excerpt.includes(searchTerm) || 
+                               category.includes(searchTerm);
+
+                if (matches) {{
                     card.classList.remove('hidden');
                     visibleCount++;
                 }} else {{
@@ -1282,21 +1551,19 @@ def generate_index_page(articles):
             noResults.style.display = visibleCount === 0 ? 'block' : 'none';
         }});
 
-        // CATEGORY FILTERS
+        // Filtrage par catégorie
         const filterButtons = document.querySelectorAll('.filter-btn');
-        
-        filterButtons.forEach(function(button) {{
+
+        filterButtons.forEach(button => {{
             button.addEventListener('click', function() {{
-                filterButtons.forEach(function(btn) {{
-                    btn.classList.remove('active');
-                }});
+                filterButtons.forEach(btn => btn.classList.remove('active'));
                 this.classList.add('active');
 
                 const category = this.getAttribute('data-category');
                 let visibleCount = 0;
 
-                articleCards.forEach(function(card) {{
-                    const cardCategory = card.querySelector('.category-badge').textContent;
+                articleCards.forEach(card => {{
+                    const cardCategory = card.querySelector('.article-category').textContent;
                     
                     if (category === 'all' || cardCategory === category) {{
                         card.classList.remove('hidden');
@@ -1310,86 +1577,61 @@ def generate_index_page(articles):
                 noResults.style.display = visibleCount === 0 ? 'block' : 'none';
             }});
         }});
+
+        // Back to Top
+        const backToTop = document.getElementById('backToTop');
+
+        window.addEventListener('scroll', () => {{
+            if (window.pageYOffset > 300) {{
+                backToTop.classList.add('visible');
+            }} else {{
+                backToTop.classList.remove('visible');
+            }}
+        }});
+
+        backToTop.addEventListener('click', () => {{
+            window.scrollTo({{
+                top: 0,
+                behavior: 'smooth'
+            }});
+        }});
     </script>
 </body>
-</html>"""
-    
-    html = html_template.format(
-        total_articles=total_articles,
-        total_categories=len(all_categories),
-        total_reading_time=total_reading_time,
-        featured_html=featured_html,
-        category_filters=category_filters,
-        articles_html=articles_html
-    )
+</html>'''
     
     return html
 
-def generate_rss_feed(articles):
-    """Génère le flux RSS"""
-    rss = Element('rss', version='2.0')
-    channel = SubElement(rss, 'channel')
-    
-    SubElement(channel, 'title').text = 'CyberInsight'
-    SubElement(channel, 'link').text = 'https://voidsponge.github.io'
-    SubElement(channel, 'description').text = 'Blog de cybersécurité : Pentest, CTF, OSINT'
-    SubElement(channel, 'language').text = 'fr'
-    
-    for article in articles[:20]:
-        item = SubElement(channel, 'item')
-        SubElement(item, 'title').text = article['title']
-        SubElement(item, 'link').text = f"https://voidsponge.github.io/articles/{article['slug']}.html"
-        SubElement(item, 'description').text = article['excerpt']
-        SubElement(item, 'pubDate').text = article['date']
-        SubElement(item, 'category').text = article['category']
-    
-    xml_string = minidom.parseString(tostring(rss)).toprettyxml(indent="  ")
-    return xml_string
-
 def main():
     """Fonction principale"""
-    print("🚀 Génération du blog CyberInsight MODERNE...")
+    print("🚀 Génération du blog CyberInsight amélioré...")
     
-    # Créer dossiers
+    # Créer les dossiers de sortie
     OUTPUT_DIR.mkdir(exist_ok=True)
     ARTICLES_OUTPUT.mkdir(exist_ok=True)
     
-    # Charger articles
+    # Charger tous les articles
     articles = []
-    for filepath in sorted(ARTICLES_DIR.glob("*.md")):
-        if filepath.name == '_template.md':
-            continue
-        print(f"  📄 Traitement de {filepath.name}...")
-        article = load_article(filepath)
-        articles.append(article)
-    
-    # Trier par date (décroissant)
-    articles.sort(key=lambda x: x['date'], reverse=True)
+    if ARTICLES_DIR.exists():
+        for filepath in ARTICLES_DIR.glob("*.md"):
+            if not filepath.name.startswith('_'):  # Ignorer les fichiers commençant par _
+                print(f"  📄 Traitement de {filepath.name}...")
+                article = load_article(filepath)
+                articles.append(article)
+                
+                # Générer la page de l'article
+                article_html = generate_article_page(article, articles)
+                output_path = ARTICLES_OUTPUT / f"{article['slug']}.html"
+                output_path.write_text(article_html, encoding='utf-8')
     
     print(f"  ✅ {len(articles)} article(s) traité(s)")
     
-    # Générer pages articles
-    for article in articles:
-        article_html = generate_article_page(article, articles)
-        output_path = ARTICLES_OUTPUT / f"{article['slug']}.html"
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(article_html)
-    
-    # Générer RSS
-    print("  📡 Génération du flux RSS...")
-    rss_content = generate_rss_feed(articles)
-    with open(OUTPUT_DIR / "rss.xml", 'w', encoding='utf-8') as f:
-        f.write(rss_content)
-    
-    # Générer page d'accueil
+    # Générer la page d'accueil
     print("  🏠 Génération de la page d'accueil...")
     index_html = generate_index_page(articles)
-    with open(OUTPUT_DIR / "index.html", 'w', encoding='utf-8') as f:
-        f.write(index_html)
+    (OUTPUT_DIR / "index.html").write_text(index_html, encoding='utf-8')
     
-    print("✨ Blog MODERNE généré avec succès !")
-    print(f"🎨 Style: Clean & Élégant + Matrix subtile")
-    print(f"📊 {len(articles)} articles")
+    print("✨ Blog généré avec succès dans le dossier _site/")
+    print(f"📊 Statistiques : {len(articles)} articles, {sum(a['reading_time'] for a in articles)} min de lecture totales")
 
 if __name__ == "__main__":
     main()
