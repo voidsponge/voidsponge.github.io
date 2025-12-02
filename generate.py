@@ -965,6 +965,113 @@ def generate_article_page(article, all_articles):
         }}
 
         /* Back to Top */
+
+
+        .shell-content {{
+            background: var(--color-bg);
+            border: 2px solid var(--color-primary);
+            border-radius: 8px;
+            width: 90%;
+            max-width: 900px;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0, 245, 160, 0.2);
+        }}
+
+        .shell-header {{
+            background: var(--color-surface-elevated);
+            border-bottom: 1px solid var(--color-border);
+            padding: 0.8rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .shell-title {{
+            font-family: var(--font-display);
+            color: var(--color-primary);
+            font-weight: 700;
+        }}
+
+        .shell-close {{
+            background: none;
+            border: none;
+            color: var(--color-text);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+        }}
+
+        .shell-close:hover {{
+            color: var(--color-accent);
+        }}
+
+        .shell-body {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--color-bg);
+        }}
+
+        .shell-output {{
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }}
+
+        .shell-output::-webkit-scrollbar {{
+            width: 8px;
+        }}
+
+        .shell-output::-webkit-scrollbar-track {{
+            background: var(--color-surface);
+        }}
+
+        .shell-output::-webkit-scrollbar-thumb {{
+            background: var(--color-border);
+            border-radius: 4px;
+        }}
+
+        .shell-output::-webkit-scrollbar-thumb:hover {{
+            background: var(--color-primary);
+        }}
+
+        .shell-input-line {{
+            display: flex;
+            align-items: center;
+            padding: 0.8rem 1rem;
+            background: var(--color-surface);
+            border-top: 1px solid var(--color-border);
+        }}
+
+        .shell-prompt {{
+            font-family: var(--font-display);
+            color: var(--color-text-muted);
+            margin-right: 0.5rem;
+            white-space: nowrap;
+        }}
+
+        .shell-input {{
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--color-text);
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            outline: none;
+        }}
+
         .back-to-top {{
             position: fixed;
             bottom: 2rem;
@@ -1020,7 +1127,114 @@ def generate_article_page(article, all_articles):
             .article-title {{ font-size: 2rem; }}
             .article-content {{ font-size: 1rem; }}
             .related-grid {{ grid-template-columns: 1fr; }}
-            .back-to-top {{
+    
+
+        .shell-content {{
+            background: var(--color-bg);
+            border: 2px solid var(--color-primary);
+            border-radius: 8px;
+            width: 90%;
+            max-width: 900px;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0, 245, 160, 0.2);
+        }}
+
+        .shell-header {{
+            background: var(--color-surface-elevated);
+            border-bottom: 1px solid var(--color-border);
+            padding: 0.8rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .shell-title {{
+            font-family: var(--font-display);
+            color: var(--color-primary);
+            font-weight: 700;
+        }}
+
+        .shell-close {{
+            background: none;
+            border: none;
+            color: var(--color-text);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+        }}
+
+        .shell-close:hover {{
+            color: var(--color-accent);
+        }}
+
+        .shell-body {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--color-bg);
+        }}
+
+        .shell-output {{
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }}
+
+        .shell-output::-webkit-scrollbar {{
+            width: 8px;
+        }}
+
+        .shell-output::-webkit-scrollbar-track {{
+            background: var(--color-surface);
+        }}
+
+        .shell-output::-webkit-scrollbar-thumb {{
+            background: var(--color-border);
+            border-radius: 4px;
+        }}
+
+        .shell-output::-webkit-scrollbar-thumb:hover {{
+            background: var(--color-primary);
+        }}
+
+        .shell-input-line {{
+            display: flex;
+            align-items: center;
+            padding: 0.8rem 1rem;
+            background: var(--color-surface);
+            border-top: 1px solid var(--color-border);
+        }}
+
+        .shell-prompt {{
+            font-family: var(--font-display);
+            color: var(--color-text-muted);
+            margin-right: 0.5rem;
+            white-space: nowrap;
+        }}
+
+        .shell-input {{
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--color-text);
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            outline: none;
+        }}
+
+        .back-to-top {{
                 bottom: 1rem;
                 right: 1rem;
                 width: 45px;
@@ -1567,14 +1781,129 @@ def generate_index_page(articles):
             transform: rotate(180deg);
         }}
 
-        .rss-link {{
-            color: var(--color-accent);
-            font-size: 1.3rem;
-            transition: transform 0.3s ease;
+        .shell-btn {{
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 50px;
+            padding: 0.5rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }}
 
-        .rss-link:hover {{
-            transform: scale(1.2);
+        .shell-btn:hover {{
+            border-color: var(--color-primary);
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(0, 245, 160, 0.3);
+        }}
+
+        /* Interactive Shell */
+        .shell-modal {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .shell-modal.active {{
+            display: flex;
+        }}
+
+        .shell-content {{
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            position: relative;
+        }}
+
+        .shell-close {{
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            color: var(--color-text);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }}
+
+        .shell-close:hover {{
+            color: var(--color-accent);
+        }}
+
+        .shell-modal h3 {{
+            font-family: var(--font-display);
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }}
+
+        .shell-modal p {{
+            color: var(--color-text-muted);
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }}
+
+        .shell-output {{
+            background: var(--color-bg);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            padding: 0.8rem;
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            word-break: break-all;
+            margin-bottom: 1rem;
+        }}
+
+        .shell-input-line {{
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }}
+
+        .shell-input {{
+            flex: 1;
+            padding: 0.8rem 1rem;
+            background: var(--color-primary);
+            color: var(--color-bg);
+            border: none;
+            border-radius: 6px;
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            text-align: center;
+            min-width: 120px;
+        }}
+
+        .shell-input:focus {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 245, 160, 0.3);
+        }}
+
+        .shell-prompt {{
+            background: var(--color-surface-elevated);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+        }}
+
+        .shell-header {{
+            border-color: var(--color-primary);
         }}
 
         .stats-bar {{
@@ -1962,6 +2291,113 @@ def generate_index_page(articles):
             margin-bottom: 2rem;
         }}
 
+
+
+        .shell-content {{
+            background: var(--color-bg);
+            border: 2px solid var(--color-primary);
+            border-radius: 8px;
+            width: 90%;
+            max-width: 900px;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0, 245, 160, 0.2);
+        }}
+
+        .shell-header {{
+            background: var(--color-surface-elevated);
+            border-bottom: 1px solid var(--color-border);
+            padding: 0.8rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .shell-title {{
+            font-family: var(--font-display);
+            color: var(--color-primary);
+            font-weight: 700;
+        }}
+
+        .shell-close {{
+            background: none;
+            border: none;
+            color: var(--color-text);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+        }}
+
+        .shell-close:hover {{
+            color: var(--color-accent);
+        }}
+
+        .shell-body {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--color-bg);
+        }}
+
+        .shell-output {{
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }}
+
+        .shell-output::-webkit-scrollbar {{
+            width: 8px;
+        }}
+
+        .shell-output::-webkit-scrollbar-track {{
+            background: var(--color-surface);
+        }}
+
+        .shell-output::-webkit-scrollbar-thumb {{
+            background: var(--color-border);
+            border-radius: 4px;
+        }}
+
+        .shell-output::-webkit-scrollbar-thumb:hover {{
+            background: var(--color-primary);
+        }}
+
+        .shell-input-line {{
+            display: flex;
+            align-items: center;
+            padding: 0.8rem 1rem;
+            background: var(--color-surface);
+            border-top: 1px solid var(--color-border);
+        }}
+
+        .shell-prompt {{
+            font-family: var(--font-display);
+            color: var(--color-text-muted);
+            margin-right: 0.5rem;
+            white-space: nowrap;
+        }}
+
+        .shell-input {{
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--color-text);
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            outline: none;
+        }}
+
         .back-to-top {{
             position: fixed;
             bottom: 2rem;
@@ -2011,7 +2447,114 @@ def generate_index_page(articles):
             .category-filters {{ gap: 0.5rem; }}
             .stats-bar {{ gap: 1.5rem; }}
             .stat-number {{ font-size: 1.5rem; }}
-            .back-to-top {{
+    
+
+        .shell-content {{
+            background: var(--color-bg);
+            border: 2px solid var(--color-primary);
+            border-radius: 8px;
+            width: 90%;
+            max-width: 900px;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0, 245, 160, 0.2);
+        }}
+
+        .shell-header {{
+            background: var(--color-surface-elevated);
+            border-bottom: 1px solid var(--color-border);
+            padding: 0.8rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .shell-title {{
+            font-family: var(--font-display);
+            color: var(--color-primary);
+            font-weight: 700;
+        }}
+
+        .shell-close {{
+            background: none;
+            border: none;
+            color: var(--color-text);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+        }}
+
+        .shell-close:hover {{
+            color: var(--color-accent);
+        }}
+
+        .shell-body {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--color-bg);
+        }}
+
+        .shell-output {{
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }}
+
+        .shell-output::-webkit-scrollbar {{
+            width: 8px;
+        }}
+
+        .shell-output::-webkit-scrollbar-track {{
+            background: var(--color-surface);
+        }}
+
+        .shell-output::-webkit-scrollbar-thumb {{
+            background: var(--color-border);
+            border-radius: 4px;
+        }}
+
+        .shell-output::-webkit-scrollbar-thumb:hover {{
+            background: var(--color-primary);
+        }}
+
+        .shell-input-line {{
+            display: flex;
+            align-items: center;
+            padding: 0.8rem 1rem;
+            background: var(--color-surface);
+            border-top: 1px solid var(--color-border);
+        }}
+
+        .shell-prompt {{
+            font-family: var(--font-display);
+            color: var(--color-text-muted);
+            margin-right: 0.5rem;
+            white-space: nowrap;
+        }}
+
+        .shell-input {{
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--color-text);
+            font-family: var(--font-display);
+            font-size: 0.9rem;
+            outline: none;
+        }}
+
+        .back-to-top {{
                 bottom: 1rem;
                 right: 1rem;
                 width: 45px;
@@ -2028,7 +2571,7 @@ def generate_index_page(articles):
                 <nav>
                     <a href="#articles">Articles</a>
                     <a href="https://github.com/voidsponge" target="_blank">GitHub</a>
-                    <a href="/rss.xml" class="rss-link" title="Flux RSS">📡</a>
+                    <button class="shell-btn" id="shellBtn" title="Ouvrir le terminal">⚡</button>
                     <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
                         <span id="themeIcon">🌙</span>
                     </button>
@@ -2107,6 +2650,36 @@ def generate_index_page(articles):
             <p>&copy; 2025 CyberInsight. Tous droits réservés.</p>
         </div>
     </footer>
+
+    <!-- Interactive Shell -->
+    <div class="shell-modal" id="shellModal">
+        <div class="shell-content">
+            <div class="shell-header">
+                <span class="shell-title">⚡ CyberInsight Terminal</span>
+                <button class="shell-close" onclick="closeShell()">×</button>
+            </div>
+            <div class="shell-body">
+                <div id="shellOutput" class="shell-output">
+<span style="color: var(--color-primary);">  ______      __              ____           _       __    __ 
+ / ____/_  __/ /_  ___  _____/  _/___  _____(_)___ _/ /_  / /_
+/ /   / / / / __ \/ _ \/ ___// // __ \/ ___/ / __ `/ __ \/ __/
+/ /___/ /_/ / /_/ /  __/ /  _/ // / / (__  ) / /_/ / / / / /_  
+\____/\__, /_.___/\___/_/  /___/_/ /_/____/_/\__, /_/ /_/\__/  
+     /____/                                  /____/             
+</span>
+<span style="color: var(--color-secondary);">═══════════════════════════════════════════════════════════</span>
+
+Bienvenue sur CyberInsight Terminal v1.0
+Tapez <span style="color: var(--color-primary);">help</span> pour voir les commandes disponibles
+
+<span style="color: var(--color-text-muted);">root@cyberinsight:~#</span> </div>
+                <div class="shell-input-line">
+                    <span class="shell-prompt">root@cyberinsight:~#</span>
+                    <input type="text" id="shellInput" class="shell-input" autofocus autocomplete="off" spellcheck="false">
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
         const themeToggle = document.getElementById('themeToggle');
@@ -2199,6 +2772,238 @@ def generate_index_page(articles):
                 top: 0,
                 behavior: 'smooth'
             }});
+        }});
+
+        // Interactive Shell
+        const shellBtn = document.getElementById('shellBtn');
+        const shellModal = document.getElementById('shellModal');
+        const shellInput = document.getElementById('shellInput');
+        const shellOutput = document.getElementById('shellOutput');
+        let commandHistory = [];
+        let historyIndex = -1;
+
+        const commands = {{
+            help: {{
+                description: 'Affiche cette aide',
+                execute: () => `
+<span style="color: var(--color-primary);">Commandes disponibles:</span>
+
+  <span style="color: var(--color-secondary);">about</span>       Informations sur CyberInsight
+  <span style="color: var(--color-secondary);">articles</span>    Liste tous les articles
+  <span style="color: var(--color-secondary);">whoami</span>      Informations sur l'auteur
+  <span style="color: var(--color-secondary);">skills</span>      Compétences techniques
+  <span style="color: var(--color-secondary);">social</span>      Liens sociaux
+  <span style="color: var(--color-secondary);">cat</span> [file]  Affiche le contenu d'un fichier
+  <span style="color: var(--color-secondary);">ls</span>          Liste les fichiers disponibles
+  <span style="color: var(--color-secondary);">clear</span>       Efface le terminal
+  <span style="color: var(--color-secondary);">exit</span>        Ferme le terminal
+  <span style="color: var(--color-secondary);">help</span>        Affiche cette aide
+
+<span style="color: var(--color-text-muted);">Astuce: Utilisez les flèches ↑↓ pour naviguer dans l'historique</span>
+`
+            }},
+            about: {{
+                description: 'Informations sur le blog',
+                execute: () => `
+<span style="color: var(--color-primary);">╔═══════════════════════════════════════════════════════╗</span>
+<span style="color: var(--color-primary);">║</span>              <span style="color: var(--color-secondary);">CYBERINSIGHT</span>                        <span style="color: var(--color-primary);">║</span>
+<span style="color: var(--color-primary);">╚═══════════════════════════════════════════════════════╝</span>
+
+<span style="color: var(--color-secondary);">Description:</span>
+  Blog de cybersécurité en français
+  Focus: Pentest, CTF, OSINT, Red Team
+
+<span style="color: var(--color-secondary);">Thématiques:</span>
+  → Web Security & API Hacking
+  → Network Penetration Testing
+  → OSINT & Reconnaissance
+  → Forensic & Incident Response
+  → DevSecOps & CI/CD Security
+
+<span style="color: var(--color-secondary);">Fonctionnalités:</span>
+  ✓ Articles techniques détaillés
+  ✓ Code playground interactif
+  ✓ Séries de tutoriels
+  ✓ Commentaires GitHub
+  ✓ Terminal interactif (vous êtes ici!)
+
+<span style="color: var(--color-text-muted);">Tapez 'articles' pour voir le contenu disponible</span>
+`
+            }},
+            whoami: {{
+                description: 'À propos de l\'auteur',
+                execute: () => `
+<span style="color: var(--color-primary);">root@cyberinsight</span>
+
+<span style="color: var(--color-secondary);">Rôle:</span> Security Researcher & Bug Hunter
+<span style="color: var(--color-secondary);">Focus:</span> Web Security, OSINT, Red Team Operations
+
+<span style="color: var(--color-secondary);">Certifications:</span>
+  → OSCP (Offensive Security Certified Professional)
+  → CEH (Certified Ethical Hacker)
+  → eWPT (eLearnSecurity Web Pentester)
+
+<span style="color: var(--color-secondary);">GitHub:</span> <span style="color: var(--color-accent);">https://github.com/voidsponge</span>
+
+<span style="color: var(--color-text-muted);">Tapez 'social' pour plus de liens</span>
+`
+            }},
+            skills: {{
+                description: 'Compétences techniques',
+                execute: () => `
+<span style="color: var(--color-primary);">╔══════════════════════════════════════════════════════╗</span>
+<span style="color: var(--color-primary);">║</span>              <span style="color: var(--color-secondary);">STACK TECHNIQUE</span>                       <span style="color: var(--color-primary);">║</span>
+<span style="color: var(--color-primary);">╚══════════════════════════════════════════════════════╝</span>
+
+<span style="color: var(--color-secondary);">Pentest & Exploitation:</span>
+  [████████████████████] 95% Burp Suite, OWASP ZAP
+  [██████████████████  ] 90% Metasploit, Cobalt Strike
+  [███████████████     ] 85% SQLMap, XSStrike
+  [████████████████    ] 88% Nmap, Masscan, Nuclei
+
+<span style="color: var(--color-secondary);">Programming:</span>
+  [████████████████████] 95% Python
+  [██████████████      ] 80% Bash/Shell
+  [███████████████     ] 75% JavaScript
+  [█████████████       ] 70% Go
+
+<span style="color: var(--color-secondary);">OSINT & Recon:</span>
+  [████████████████████] 98% Shodan, Censys
+  [████████████████    ] 88% theHarvester, Recon-ng
+  [███████████████████ ] 92% Subfinder, Amass
+
+<span style="color: var(--color-text-muted);">Tapez 'articles' pour voir les tutoriels associés</span>
+`
+            }},
+            social: {{
+                description: 'Liens sociaux et contact',
+                execute: () => `
+<span style="color: var(--color-primary);">═══════════════════════════════════════</span>
+<span style="color: var(--color-secondary);">         LIENS & CONTACT</span>
+<span style="color: var(--color-primary);">═══════════════════════════════════════</span>
+
+<span style="color: var(--color-accent);">→</span> GitHub:    <span style="color: var(--color-secondary);">https://github.com/voidsponge</span>
+<span style="color: var(--color-accent);">→</span> Twitter:   <span style="color: var(--color-secondary);">@voidsponge</span>
+<span style="color: var(--color-accent);">→</span> LinkedIn:  <span style="color: var(--color-secondary);">/in/voidsponge</span>
+<span style="color: var(--color-accent);">→</span> HackerOne: <span style="color: var(--color-secondary);">@voidsponge</span>
+
+<span style="color: var(--color-text-muted);">N'hésitez pas à me contacter pour collaborations !</span>
+`
+            }},
+            articles: {{
+                description: 'Liste des articles',
+                execute: () => `
+<span style="color: var(--color-primary);">Articles disponibles:</span>
+
+  01. <span style="color: var(--color-secondary);">[Web Security]</span> Exploitation SSRF sur AWS (2025)
+      <span style="color: var(--color-text-muted);">└─ Techniques avancées, bypass filters, IMDSv2</span>
+
+  02. <span style="color: var(--color-secondary);">[Phishing]</span> Analyse campagne sophistiquée (2025)
+      <span style="color: var(--color-text-muted);">└─ Evilginx2, AiTM attacks, IoC analysis</span>
+
+<span style="color: var(--color-accent);">→</span> Plus d'articles à venir! Tapez 'exit' et explorez le blog.
+`
+            }},
+            ls: {{
+                description: 'Liste les fichiers',
+                execute: () => `
+<span style="color: var(--color-secondary);">drwxr-xr-x</span> 2 root root 4096 Dec  2 2025 <span style="color: var(--color-primary);">articles/</span>
+<span style="color: var(--color-secondary);">-rw-r--r--</span> 1 root root 2048 Dec  2 2025 about.txt
+<span style="color: var(--color-secondary);">-rw-r--r--</span> 1 root root 1024 Dec  2 2025 whoami.txt
+<span style="color: var(--color-secondary);">-rw-r--r--</span> 1 root root  512 Dec  2 2025 skills.txt
+
+<span style="color: var(--color-text-muted);">Utilisez 'cat [fichier]' pour lire le contenu</span>
+`
+            }},
+            cat: {{
+                description: 'Affiche le contenu d\'un fichier',
+                execute: (args) => {{
+                    if (!args[0]) {{
+                        return '<span style="color: var(--color-accent);">Erreur:</span> Spécifiez un fichier. Exemple: cat about.txt';
+                    }}
+                    const file = args[0].replace('.txt', '');
+                    if (commands[file]) {{
+                        return commands[file].execute();
+                    }}
+                    return `<span style="color: var(--color-accent);">cat:</span> ${{args[0]}}: No such file or directory`;
+                }}
+            }},
+            clear: {{
+                description: 'Efface le terminal',
+                execute: () => {{
+                    shellOutput.innerHTML = '<span style="color: var(--color-text-muted);">root@cyberinsight:~#</span> ';
+                    return '';
+                }}
+            }},
+            exit: {{
+                description: 'Ferme le terminal',
+                execute: () => {{
+                    closeShell();
+                    return '';
+                }}
+            }}
+        }};
+
+        if (shellBtn) {{
+            shellBtn.addEventListener('click', () => {{
+                shellModal.classList.add('active');
+                setTimeout(() => shellInput.focus(), 100);
+            }});
+        }}
+
+        function closeShell() {{
+            shellModal.classList.remove('active');
+        }}
+
+        shellInput.addEventListener('keydown', (e) => {{
+            if (e.key === 'Enter') {{
+                const command = shellInput.value.trim();
+                if (command) {{
+                    commandHistory.push(command);
+                    historyIndex = commandHistory.length;
+                    executeCommand(command);
+                    shellInput.value = '';
+                }}
+            }} else if (e.key === 'ArrowUp') {{
+                e.preventDefault();
+                if (historyIndex > 0) {{
+                    historyIndex--;
+                    shellInput.value = commandHistory[historyIndex];
+                }}
+            }} else if (e.key === 'ArrowDown') {{
+                e.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {{
+                    historyIndex++;
+                    shellInput.value = commandHistory[historyIndex];
+                }} else {{
+                    historyIndex = commandHistory.length;
+                    shellInput.value = '';
+                }}
+            }}
+        }});
+
+        function executeCommand(input) {{
+            const [cmd, ...args] = input.split(' ');
+            
+            shellOutput.innerHTML += `<span style="color: var(--color-primary);">root@cyberinsight:~#</span> ${{input}}\n`;
+            
+            if (commands[cmd]) {{
+                const output = commands[cmd].execute(args);
+                if (output) {{
+                    shellOutput.innerHTML += output + '\n';
+                }}
+            }} else {{
+                shellOutput.innerHTML += `<span style="color: var(--color-accent);">bash:</span> ${{cmd}}: command not found\n<span style="color: var(--color-text-muted);">Tapez 'help' pour voir les commandes disponibles</span>\n`;
+            }}
+            
+            shellOutput.innerHTML += '\n';
+            shellOutput.scrollTop = shellOutput.scrollHeight;
+        }}
+
+        shellModal.addEventListener('click', (e) => {{
+            if (e.target === shellModal) {{
+                closeShell();
+            }}
         }});
     </script>
 </body>
