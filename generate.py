@@ -1536,169 +1536,127 @@ def generate_rss_feed(articles):
     return xml_str
 
 def generate_index_page(articles):
-    """Génère la page d'accueil (code existant conservé avec améliorations mineures)"""
+    """Génère la page d'accueil"""
+    total_articles = len(articles)
+    all_categories = sorted(set(a['category'] for a in articles))
+    total_reading_time = sum(a['reading_time'] for a in articles)
     
-    articles_sorted = sorted(articles, key=lambda x: x['date'], reverse=True)
-    featured = articles_sorted[0] if articles_sorted else None
-    categories = sorted(set(article['category'] for article in articles_sorted))
-    
-    category_filters = ''
-    for category in categories:
-        category_filters += f'<button class="filter-btn" data-category="{category}">{category}</button>\n                    '
-    
-    articles_html = ''
-    for article in articles_sorted:
-        tags_preview = ''
-        if article['tags']:
-            tags_preview = ' '.join([f'#{tag}' for tag in article['tags'][:3]])
+    # Articles HTML
+    articles_html = ""
+    for article in articles[:12]:
+        series_badge = ""
+        if article.get('series'):
+            series_badge = f'<span class="series-badge">📚 {article["series"]} #{article.get("series_part", "?")}</span>'
         
-        series_badge = ''
-        if article['series']:
-            series_badge = f'<span class="series-badge">📚 Série: {article["series"]} #{article["series_part"]}</span>'
-        
-        articles_html += f'''
-        <article class="article-card" data-category="{article['category']}">
-            <div class="article-meta">
+        articles_html += f"""
+        <article class="article-card">
+            <div class="article-header">
                 <span class="article-category">{article['category']}</span>
-                <span>•</span>
-                <span>{format_date(article['date'])}</span>
-                <span>•</span>
-                <span class="reading-time">⏱️ {article['reading_time']} min</span>
+                <span class="article-date">{article['date']}</span>
             </div>
-            <h3>{article['title']}</h3>
             {series_badge}
+            <h3><a href="/articles/{article['slug']}.html">{article['title']}</a></h3>
             <p class="article-excerpt">{article['excerpt']}</p>
-            <div class="article-card-footer">
-                <a href="articles/{article['slug']}.html" class="read-more">Lire plus</a>
-                {f'<div class="tags-preview">{tags_preview}</div>' if tags_preview else ''}
+            <div class="article-meta">
+                <span>⏱️ {article['reading_time']} min</span>
+                <a href="/articles/{article['slug']}.html" class="read-more">Lire →</a>
             </div>
         </article>
-        '''
+        """
     
-    featured_html = ''
+    # Featured article
+    featured = articles[0] if articles else None
+    featured_html = ""
     if featured:
-        featured_html = f'''
+        featured_html = f"""
         <div class="featured-article">
-            <span class="featured-label">⭐ Article en vedette</span>
-            <div class="featured-meta">
-                <span class="featured-category">{featured['category']}</span>
-                <span>•</span>
-                <span>{format_date(featured['date'])}</span>
-                <span>•</span>
-                <span>⏱️ {featured['reading_time']} min</span>
-            </div>
-            <h2>{featured['title']}</h2>
+            <span class="featured-badge">⭐ À la une</span>
+            <h2><a href="/articles/{featured['slug']}.html">{featured['title']}</a></h2>
             <p>{featured['excerpt']}</p>
-            <a href="articles/{featured['slug']}.html" class="read-more">Lire l'article complet</a>
+            <div class="featured-meta">
+                <span>{featured['category']}</span>
+                <span>•</span>
+                <span>{featured['date']}</span>
+                <span>•</span>
+                <span>{featured['reading_time']} min</span>
+            </div>
         </div>
-        '''
+        """
     
-    total_articles = len(articles)
-    total_reading_time = sum(a['reading_time'] for a in articles)
-    all_categories = len(categories)
+    # Category filters
+    category_filters = '<button class="filter-btn active" data-category="all">Tous</button>'
+    for cat in all_categories:
+        category_filters += f'<button class="filter-btn" data-category="{cat}">{cat}</button>'
     
-    # HTML simplifié - je garde seulement les parties critiques
-    html = f'''<!DOCTYPE html>
+    # HTML page - ON UTILISE PAS f-string !!!
+    html_template = """<!DOCTYPE html>
 <html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CyberInsight - Blog de Cybersécurité</title>
-    <meta name="description" content="Explorez les dernières menaces, vulnérabilités et techniques de protection">
     <link rel="alternate" type="application/rss+xml" title="CyberInsight RSS" href="/rss.xml">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Styles inchangés du code précédent - conservés pour la concision */
+        :root {{
+            --font-display: 'Courier New', monospace;
+            --font-body: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }}
+
         :root[data-theme="dark"] {{
             --color-bg: #0a0e17;
-            --color-surface: #151922;
-            --color-surface-elevated: #1e232e;
+            --color-surface: #141b2d;
+            --color-surface-elevated: #1a2332;
+            --color-text: #e8ecf3;
+            --color-text-muted: #8892a6;
             --color-primary: #00f5a0;
             --color-secondary: #00d9ff;
             --color-accent: #ff006e;
-            --color-text: #e8ecf3;
-            --color-text-muted: #8b92a8;
-            --color-border: #2a3142;
+            --color-border: #2a3447;
         }}
 
         :root[data-theme="light"] {{
             --color-bg: #ffffff;
-            --color-surface: #f8f9fa;
+            --color-surface: #f5f7fa;
             --color-surface-elevated: #ffffff;
+            --color-text: #1a1a1a;
+            --color-text-muted: #6b7280;
             --color-primary: #00a870;
             --color-secondary: #0088cc;
-            --color-accent: #e91e63;
-            --color-text: #1a1a1a;
-            --color-text-muted: #6c757d;
-            --color-border: #dee2e6;
+            --color-accent: #cc0055;
+            --color-border: #e5e7eb;
         }}
 
-        :root {{
-            --font-display: 'JetBrains Mono', monospace;
-            --font-body: 'Poppins', sans-serif;
-            --shadow-glow: 0 0 30px rgba(0, 245, 160, 0.15);
-            --shadow-strong: 0 20px 50px rgba(0, 0, 0, 0.5);
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }}
-
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 
         body {{
             font-family: var(--font-body);
             background: var(--color-bg);
             color: var(--color-text);
-            line-height: 1.7;
-            overflow-x: hidden;
-            transition: background 0.3s ease, color 0.3s ease;
-        }}
-
-        body::before {{
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: 
-                radial-gradient(circle at 20% 50%, rgba(0, 245, 160, 0.05) 0%, transparent 50%),
-                radial-gradient(circle at 80% 80%, rgba(0, 217, 255, 0.05) 0%, transparent 50%);
-            pointer-events: none;
-            z-index: 0;
-            opacity: 0.5;
-            transition: opacity 0.3s ease;
-        }}
-
-        [data-theme="light"] body::before {{
-            opacity: 0.2;
+            line-height: 1.6;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }}
 
         .container {{
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 2rem;
-            position: relative;
-            z-index: 1;
         }}
 
         header {{
-            padding: 2rem 0;
+            background: var(--color-surface);
             border-bottom: 1px solid var(--color-border);
-            backdrop-filter: blur(10px);
+            padding: 1rem 0;
             position: sticky;
             top: 0;
             z-index: 100;
-            background: var(--color-bg);
-            animation: slideDown 0.6s ease-out;
-            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
         }}
 
-        @keyframes slideDown {{
-            from {{ transform: translateY(-100%); opacity: 0; }}
-            to {{ transform: translateY(0); opacity: 1; }}
-        }}
-
-        .header-content {{
+        nav {{
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -1706,60 +1664,21 @@ def generate_index_page(articles):
 
         .logo {{
             font-family: var(--font-display);
-            font-size: 1.8rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            letter-spacing: -0.02em;
-            position: relative;
-        }}
-
-        .logo::before {{
-            content: '> ';
-            color: var(--color-accent);
-            -webkit-text-fill-color: var(--color-accent);
-            animation: blink 1.5s infinite;
-        }}
-
-        @keyframes blink {{
-            0%, 49% {{ opacity: 1; }}
-            50%, 100% {{ opacity: 0; }}
-        }}
-
-        nav {{
-            display: flex;
-            gap: 2.5rem;
-            align-items: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--color-primary);
+            text-decoration: none;
         }}
 
         nav a {{
-            color: var(--color-text-muted);
+            color: var(--color-text);
             text-decoration: none;
-            font-weight: 500;
-            font-size: 0.95rem;
-            transition: all 0.3s ease;
-            position: relative;
-        }}
-
-        nav a::after {{
-            content: '';
-            position: absolute;
-            bottom: -5px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: var(--color-primary);
-            transition: width 0.3s ease;
+            margin-left: 2rem;
+            transition: color 0.3s ease;
         }}
 
         nav a:hover {{
             color: var(--color-primary);
-        }}
-
-        nav a:hover::after {{
-            width: 100%;
         }}
 
         .theme-toggle {{
@@ -1782,139 +1701,33 @@ def generate_index_page(articles):
             transform: rotate(180deg);
         }}
 
-        .shell-btn {{
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: 50px;
-            padding: 0.5rem;
-            cursor: pointer;
-            font-size: 1.2rem;
-            transition: all 0.3s ease;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }}
-
-        .shell-btn:hover {{
-            border-color: var(--color-primary);
-            transform: scale(1.1);
-            box-shadow: 0 0 20px rgba(0, 245, 160, 0.3);
-        }}
-
-        /* Interactive Shell */
-        .shell-modal {{
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 10000;
-            align-items: center;
-            justify-content: center;
-        }}
-
-        .shell-modal.active {{
-            display: flex;
-        }}
-
-        .shell-content {{
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: 12px;
-            padding: 2rem;
-            max-width: 500px;
-            width: 90%;
-            position: relative;
-        }}
-
-        .shell-close {{
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            background: none;
-            border: none;
-            color: var(--color-text);
-            font-size: 1.5rem;
-            cursor: pointer;
-            transition: color 0.3s ease;
-        }}
-
-        .shell-close:hover {{
-            color: var(--color-accent);
-        }}
-
-        .shell-modal h3 {{
-            font-family: var(--font-display);
-            margin-bottom: 1rem;
-            font-size: 1.5rem;
-        }}
-
-        .shell-modal p {{
-            color: var(--color-text-muted);
-            margin-bottom: 1.5rem;
-            line-height: 1.6;
-        }}
-
-        .shell-output {{
-            background: var(--color-bg);
-            border: 1px solid var(--color-border);
-            border-radius: 6px;
-            padding: 0.8rem;
-            font-family: var(--font-display);
-            font-size: 0.9rem;
-            word-break: break-all;
-            margin-bottom: 1rem;
-        }}
-
-        .shell-input-line {{
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }}
-
-        .shell-input {{
-            flex: 1;
-            padding: 0.8rem 1rem;
-            background: var(--color-primary);
-            color: var(--color-bg);
-            border: none;
-            border-radius: 6px;
-            font-family: var(--font-display);
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
+        .hero {{
+            padding: 4rem 0;
             text-align: center;
-            min-width: 120px;
         }}
 
-        .shell-input:focus {{
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 245, 160, 0.3);
+        .hero h1 {{
+            font-family: var(--font-display);
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }}
 
-        .shell-prompt {{
-            background: var(--color-surface-elevated);
-            color: var(--color-text);
-            border: 1px solid var(--color-border);
-        }}
-
-        .shell-header {{
-            border-color: var(--color-primary);
+        .hero p {{
+            font-size: 1.2rem;
+            color: var(--color-text-muted);
+            max-width: 600px;
+            margin: 0 auto;
         }}
 
         .stats-bar {{
-            padding: 1.5rem 0;
             display: flex;
             justify-content: center;
             gap: 3rem;
-            flex-wrap: wrap;
+            padding: 2rem 0;
             border-bottom: 1px solid var(--color-border);
-            animation: fadeInUp 0.8s ease-out 0.1s both;
         }}
 
         .stat {{
@@ -1922,724 +1735,309 @@ def generate_index_page(articles):
         }}
 
         .stat-number {{
-            font-size: 2rem;
-            font-weight: 700;
             font-family: var(--font-display);
-            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: 2rem;
+            color: var(--color-primary);
+            display: block;
         }}
 
         .stat-label {{
-            font-size: 0.9rem;
             color: var(--color-text-muted);
-            margin-top: 0.3rem;
+            font-size: 0.9rem;
         }}
 
-        .search-filter-section {{
-            padding: 2rem 0;
-            border-bottom: 1px solid var(--color-border);
-            animation: fadeInUp 0.8s ease-out 0.3s both;
+        .featured-article {{
+            background: linear-gradient(135deg, var(--color-surface), var(--color-surface-elevated));
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 3rem 0;
+            position: relative;
         }}
 
-        .search-bar {{
+        .featured-badge {{
+            background: var(--color-accent);
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }}
+
+        .featured-article h2 {{
+            margin: 1rem 0;
+            font-size: 2rem;
+        }}
+
+        .featured-article h2 a {{
+            color: var(--color-text);
+            text-decoration: none;
+        }}
+
+        .featured-article h2 a:hover {{
+            color: var(--color-primary);
+        }}
+
+        .featured-meta {{
             display: flex;
             gap: 1rem;
-            margin-bottom: 2rem;
-            align-items: center;
+            color: var(--color-text-muted);
+            margin-top: 1rem;
         }}
 
-        .search-input {{
-            flex: 1;
-            padding: 1rem 1.5rem;
+        .search-filters {{
+            margin: 3rem 0;
+        }}
+
+        .search-box {{
+            width: 100%;
+            padding: 1rem;
             background: var(--color-surface);
             border: 1px solid var(--color-border);
             border-radius: 8px;
             color: var(--color-text);
-            font-family: var(--font-body);
             font-size: 1rem;
-            transition: all 0.3s ease;
+            margin-bottom: 1.5rem;
         }}
 
-        .search-input:focus {{
+        .search-box:focus {{
             outline: none;
             border-color: var(--color-primary);
-            box-shadow: 0 0 0 3px rgba(0, 245, 160, 0.1);
-        }}
-
-        .search-input::placeholder {{
-            color: var(--color-text-muted);
         }}
 
         .category-filters {{
             display: flex;
             gap: 1rem;
             flex-wrap: wrap;
-            justify-content: center;
         }}
 
         .filter-btn {{
-            padding: 0.6rem 1.2rem;
             background: var(--color-surface);
             border: 1px solid var(--color-border);
-            border-radius: 6px;
-            color: var(--color-text-muted);
-            font-family: var(--font-display);
-            font-size: 0.85rem;
+            padding: 0.6rem 1.2rem;
+            border-radius: 20px;
             cursor: pointer;
             transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            color: var(--color-text);
+            font-size: 0.9rem;
         }}
 
         .filter-btn:hover {{
             border-color: var(--color-primary);
-            color: var(--color-primary);
-            transform: translateY(-2px);
         }}
 
         .filter-btn.active {{
             background: var(--color-primary);
             color: var(--color-bg);
             border-color: var(--color-primary);
-            box-shadow: var(--shadow-glow);
-        }}
-
-        .no-results {{
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--color-text-muted);
-            font-size: 1.2rem;
-        }}
-
-        .no-results-icon {{
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            opacity: 0.3;
-        }}
-
-        .article-card.hidden {{
-            display: none;
-        }}
-
-        .hero {{
-            padding: 6rem 0;
-            text-align: center;
-            animation: fadeInUp 0.8s ease-out 0.2s both;
-        }}
-
-        @keyframes fadeInUp {{
-            from {{ opacity: 0; transform: translateY(30px); }}
-            to {{ opacity: 1; transform: translateY(0); }}
-        }}
-
-        .hero h1 {{
-            font-family: var(--font-display);
-            font-size: 4rem;
-            font-weight: 700;
-            margin-bottom: 1.5rem;
-            line-height: 1.1;
-            letter-spacing: -0.03em;
-        }}
-
-        .hero h1 .gradient-text {{
-            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary), var(--color-accent));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            background-size: 200% 200%;
-            animation: gradientShift 5s ease infinite;
-        }}
-
-        @keyframes gradientShift {{
-            0%, 100% {{ background-position: 0% 50%; }}
-            50% {{ background-position: 100% 50%; }}
-        }}
-
-        .hero p {{
-            font-size: 1.3rem;
-            color: var(--color-text-muted);
-            max-width: 700px;
-            margin: 0 auto 2rem;
-        }}
-
-        .hero-tags {{
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: 2rem;
-        }}
-
-        .tag {{
-            padding: 0.5rem 1rem;
-            background: var(--color-surface-elevated);
-            border: 1px solid var(--color-border);
-            border-radius: 6px;
-            font-family: var(--font-display);
-            font-size: 0.85rem;
-            color: var(--color-primary);
-            transition: all 0.3s ease;
-            cursor: default;
-        }}
-
-        .tag:hover {{
-            background: var(--color-primary);
-            color: var(--color-bg);
-            border-color: var(--color-primary);
-            box-shadow: var(--shadow-glow);
-            transform: translateY(-2px);
-        }}
-
-        .articles-section {{
-            padding: 4rem 0;
-            animation: fadeInUp 0.8s ease-out 0.4s both;
-        }}
-
-        .section-title {{
-            font-family: var(--font-display);
-            font-size: 2rem;
-            margin-bottom: 3rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }}
-
-        .section-title::before {{
-            content: '#';
-            color: var(--color-accent);
-            font-size: 2.5rem;
         }}
 
         .articles-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
             gap: 2rem;
+            margin: 3rem 0;
         }}
 
         .article-card {{
             background: var(--color-surface);
             border: 1px solid var(--color-border);
             border-radius: 12px;
-            padding: 2rem;
-            transition: all 0.4s ease;
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }}
-
-        .article-card::before {{
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
-            transform: scaleX(0);
-            transform-origin: left;
-            transition: transform 0.4s ease;
-        }}
-
-        .article-card:hover::before {{
-            transform: scaleX(1);
+            padding: 1.5rem;
+            transition: all 0.3s ease;
         }}
 
         .article-card:hover {{
-            transform: translateY(-8px);
-            box-shadow: var(--shadow-strong);
+            transform: translateY(-5px);
             border-color: var(--color-primary);
+            box-shadow: 0 10px 30px rgba(0, 245, 160, 0.1);
         }}
 
-        .article-meta {{
+        .article-card.hidden {{
+            display: none;
+        }}
+
+        .article-header {{
             display: flex;
-            gap: 1rem;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 1rem;
-            font-size: 0.85rem;
-            color: var(--color-text-muted);
-            font-family: var(--font-display);
-            flex-wrap: wrap;
         }}
 
         .article-category {{
-            color: var(--color-primary);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            background: var(--color-primary);
+            color: var(--color-bg);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
         }}
 
-        .reading-time {{
-            display: flex;
-            align-items: center;
-            gap: 0.3rem;
+        .article-date {{
+            color: var(--color-text-muted);
+            font-size: 0.9rem;
         }}
 
         .series-badge {{
             display: inline-block;
-            background: var(--color-accent);
+            background: var(--color-secondary);
             color: var(--color-bg);
-            padding: 0.3rem 0.6rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-family: var(--font-display);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
             margin-bottom: 0.5rem;
         }}
 
         .article-card h3 {{
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-            color: var(--color-text);
-            line-height: 1.3;
-            transition: color 0.3s ease;
+            margin: 0.5rem 0;
+            font-size: 1.3rem;
         }}
 
-        .article-card:hover h3 {{
+        .article-card h3 a {{
+            color: var(--color-text);
+            text-decoration: none;
+        }}
+
+        .article-card h3 a:hover {{
             color: var(--color-primary);
         }}
 
         .article-excerpt {{
             color: var(--color-text-muted);
-            margin-bottom: 1.5rem;
-            line-height: 1.6;
-            flex-grow: 1;
+            margin: 1rem 0;
         }}
 
-        .article-card-footer {{
+        .article-meta {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 1rem;
-        }}
-
-        .tags-preview {{
-            color: var(--color-text-muted);
-            font-size: 0.85rem;
-            font-family: var(--font-display);
-        }}
-
-        .read-more {{
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: var(--color-secondary);
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 0.9rem;
-            transition: gap 0.3s ease;
-            white-space: nowrap;
-        }}
-
-        .read-more:hover {{
-            gap: 1rem;
-        }}
-
-        .read-more::after {{
-            content: '→';
-            font-size: 1.2rem;
-        }}
-
-        .featured-article {{
-            background: linear-gradient(135deg, var(--color-surface-elevated), var(--color-surface));
-            border: 1px solid var(--color-primary);
-            border-radius: 16px;
-            padding: 3rem;
-            margin-bottom: 4rem;
-            position: relative;
-            overflow: hidden;
-            box-shadow: var(--shadow-glow);
-            animation: fadeInUp 0.8s ease-out 0.6s both;
-        }}
-
-        .featured-label {{
-            display: inline-block;
-            background: var(--color-accent);
-            color: var(--color-bg);
-            padding: 0.4rem 1rem;
-            border-radius: 6px;
-            font-family: var(--font-display);
-            font-size: 0.8rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-bottom: 1rem;
-        }}
-
-        .featured-meta {{
-            font-size: 0.9rem;
-            color: var(--color-text-muted);
-            font-family: var(--font-display);
-            margin-bottom: 1.5rem;
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }}
-
-        .featured-category {{
-            color: var(--color-primary);
-            text-transform: uppercase;
-        }}
-
-        .featured-article h2 {{
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-            line-height: 1.2;
-        }}
-
-        .featured-article p {{
-            font-size: 1.1rem;
-            color: var(--color-text-muted);
-            margin-bottom: 2rem;
-        }}
-
-
-
-        .shell-content {{
-            background: var(--color-bg);
-            border: 2px solid var(--color-primary);
-            border-radius: 8px;
-            width: 90%;
-            max-width: 900px;
-            height: 600px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 0 40px rgba(0, 245, 160, 0.2);
-        }}
-
-        .shell-header {{
-            background: var(--color-surface-elevated);
-            border-bottom: 1px solid var(--color-border);
-            padding: 0.8rem 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }}
-
-        .shell-title {{
-            font-family: var(--font-display);
-            color: var(--color-primary);
-            font-weight: 700;
-        }}
-
-        .shell-close {{
-            background: none;
-            border: none;
-            color: var(--color-text);
-            font-size: 1.5rem;
-            cursor: pointer;
-            transition: color 0.3s ease;
-            padding: 0;
-            width: 30px;
-            height: 30px;
-        }}
-
-        .shell-close:hover {{
-            color: var(--color-accent);
-        }}
-
-        .shell-body {{
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            background: var(--color-bg);
-        }}
-
-        .shell-output {{
-            flex: 1;
-            padding: 1rem;
-            overflow-y: auto;
-            font-family: var(--font-display);
-            font-size: 0.9rem;
-            line-height: 1.5;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }}
-
-        .shell-output::-webkit-scrollbar {{
-            width: 8px;
-        }}
-
-        .shell-output::-webkit-scrollbar-track {{
-            background: var(--color-surface);
-        }}
-
-        .shell-output::-webkit-scrollbar-thumb {{
-            background: var(--color-border);
-            border-radius: 4px;
-        }}
-
-        .shell-output::-webkit-scrollbar-thumb:hover {{
-            background: var(--color-primary);
-        }}
-
-        .shell-input-line {{
-            display: flex;
-            align-items: center;
-            padding: 0.8rem 1rem;
-            background: var(--color-surface);
+            margin-top: 1rem;
+            padding-top: 1rem;
             border-top: 1px solid var(--color-border);
         }}
 
-        .shell-prompt {{
-            font-family: var(--font-display);
-            color: var(--color-text-muted);
-            margin-right: 0.5rem;
-            white-space: nowrap;
+        .read-more {{
+            color: var(--color-primary);
+            text-decoration: none;
+            font-weight: 600;
         }}
 
-        .shell-input {{
-            flex: 1;
-            background: none;
-            border: none;
-            color: var(--color-text);
-            font-family: var(--font-display);
-            font-size: 0.9rem;
-            outline: none;
+        .read-more:hover {{
+            text-decoration: underline;
+        }}
+
+        .no-results {{
+            text-align: center;
+            padding: 3rem;
+            color: var(--color-text-muted);
+            display: none;
         }}
 
         .back-to-top {{
             position: fixed;
             bottom: 2rem;
             right: 2rem;
-            width: 50px;
-            height: 50px;
             background: var(--color-primary);
             color: var(--color-bg);
-            border: none;
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
-            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
             opacity: 0;
-            pointer-events: none;
+            visibility: hidden;
             transition: all 0.3s ease;
-            z-index: 1000;
+            font-size: 1.5rem;
+            border: none;
             box-shadow: 0 4px 12px rgba(0, 245, 160, 0.3);
         }}
 
         .back-to-top.visible {{
             opacity: 1;
-            pointer-events: all;
+            visibility: visible;
         }}
 
         .back-to-top:hover {{
             transform: translateY(-5px);
-            box-shadow: 0 8px 20px rgba(0, 245, 160, 0.4);
         }}
 
         footer {{
+            background: var(--color-surface);
             border-top: 1px solid var(--color-border);
-            padding: 3rem 0;
-            margin-top: 6rem;
+            padding: 2rem 0;
             text-align: center;
+            margin-top: 4rem;
             color: var(--color-text-muted);
         }}
 
         @media (max-width: 768px) {{
-            .hero h1 {{ font-size: 2.5rem; }}
-            .hero p {{ font-size: 1.1rem; }}
-            nav {{ gap: 1rem; }}
-            nav a {{ font-size: 0.85rem; }}
-            .articles-grid {{ grid-template-columns: 1fr; }}
-            .featured-article {{ padding: 2rem; }}
-            .featured-article h2 {{ font-size: 1.8rem; }}
-            .search-filter-section {{ padding: 1.5rem 0; }}
-            .category-filters {{ gap: 0.5rem; }}
-            .stats-bar {{ gap: 1.5rem; }}
-            .stat-number {{ font-size: 1.5rem; }}
-    
-
-        .shell-content {{
-            background: var(--color-bg);
-            border: 2px solid var(--color-primary);
-            border-radius: 8px;
-            width: 90%;
-            max-width: 900px;
-            height: 600px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 0 40px rgba(0, 245, 160, 0.2);
-        }}
-
-        .shell-header {{
-            background: var(--color-surface-elevated);
-            border-bottom: 1px solid var(--color-border);
-            padding: 0.8rem 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }}
-
-        .shell-title {{
-            font-family: var(--font-display);
-            color: var(--color-primary);
-            font-weight: 700;
-        }}
-
-        .shell-close {{
-            background: none;
-            border: none;
-            color: var(--color-text);
-            font-size: 1.5rem;
-            cursor: pointer;
-            transition: color 0.3s ease;
-            padding: 0;
-            width: 30px;
-            height: 30px;
-        }}
-
-        .shell-close:hover {{
-            color: var(--color-accent);
-        }}
-
-        .shell-body {{
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            background: var(--color-bg);
-        }}
-
-        .shell-output {{
-            flex: 1;
-            padding: 1rem;
-            overflow-y: auto;
-            font-family: var(--font-display);
-            font-size: 0.9rem;
-            line-height: 1.5;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }}
-
-        .shell-output::-webkit-scrollbar {{
-            width: 8px;
-        }}
-
-        .shell-output::-webkit-scrollbar-track {{
-            background: var(--color-surface);
-        }}
-
-        .shell-output::-webkit-scrollbar-thumb {{
-            background: var(--color-border);
-            border-radius: 4px;
-        }}
-
-        .shell-output::-webkit-scrollbar-thumb:hover {{
-            background: var(--color-primary);
-        }}
-
-        .shell-input-line {{
-            display: flex;
-            align-items: center;
-            padding: 0.8rem 1rem;
-            background: var(--color-surface);
-            border-top: 1px solid var(--color-border);
-        }}
-
-        .shell-prompt {{
-            font-family: var(--font-display);
-            color: var(--color-text-muted);
-            margin-right: 0.5rem;
-            white-space: nowrap;
-        }}
-
-        .shell-input {{
-            flex: 1;
-            background: none;
-            border: none;
-            color: var(--color-text);
-            font-family: var(--font-display);
-            font-size: 0.9rem;
-            outline: none;
-        }}
-
-        .back-to-top {{
-                bottom: 1rem;
-                right: 1rem;
-                width: 45px;
-                height: 45px;
+            .hero h1 {{
+                font-size: 2rem;
+            }}
+            
+            .stats-bar {{
+                flex-direction: column;
+                gap: 1rem;
+            }}
+            
+            .articles-grid {{
+                grid-template-columns: 1fr;
             }}
         }}
     </style>
 </head>
 <body>
     <header>
-        <div class="container">
-            <div class="header-content">
-                <div class="logo">CyberInsight</div>
-                <nav>
-                    <a href="#articles">Articles</a>
-                    <a href="https://github.com/voidsponge" target="_blank">GitHub</a>
-                    <button class="shell-btn" id="shellBtn" title="Ouvrir le terminal">⚡</button>
-                    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
-                        <span id="themeIcon">🌙</span>
-                    </button>
-                </nav>
+        <nav class="container">
+            <a href="/" class="logo">CyberInsight</a>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <a href="#articles">Articles</a>
+                <a href="https://github.com/voidsponge" target="_blank">GitHub</a>
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                    <span id="themeIcon">🌙</span>
+                </button>
             </div>
-        </div>
+        </nav>
     </header>
 
-    <main>
-        <section class="stats-bar">
-            <div class="stat">
-                <div class="stat-number">{total_articles}</div>
-                <div class="stat-label">Articles</div>
-            </div>
-            <div class="stat">
-                <div class="stat-number">{all_categories}</div>
-                <div class="stat-label">Catégories</div>
-            </div>
-            <div class="stat">
-                <div class="stat-number">{total_reading_time}</div>
-                <div class="stat-label">Minutes de lecture</div>
-            </div>
-        </section>
-
+    <main class="container">
         <section class="hero">
-            <div class="container">
-                <h1><span class="gradient-text">Décryptage de la Cybersécurité</span></h1>
-                <p>Explorez les dernières menaces, vulnérabilités et techniques de protection dans le monde de la sécurité informatique</p>
-                <div class="hero-tags">
-                    <span class="tag">DevSecOps</span>
-                    <span class="tag">Forensic</span>
-                    <span class="tag">CTF</span>
-                    <span class="tag">Cheat</span>
-                    <span class="tag">OSINT</span>
-                    <span class="tag">Red Team / Blue Team</span>
-                </div>
+            <h1>CyberInsight</h1>
+            <p>Blog de cybersécurité : Pentest, CTF, OSINT et plus encore</p>
+        </section>
+
+        <div class="stats-bar">
+            <div class="stat">
+                <span class="stat-number">{total_articles}</span>
+                <span class="stat-label">Articles</span>
+            </div>
+            <div class="stat">
+                <span class="stat-number">{total_categories}</span>
+                <span class="stat-label">Catégories</span>
+            </div>
+            <div class="stat">
+                <span class="stat-number">{total_reading_time}</span>
+                <span class="stat-label">Minutes de lecture</span>
+            </div>
+        </div>
+
+        {featured_html}
+
+        <section class="search-filters">
+            <input type="text" id="searchInput" class="search-box" placeholder="🔍 Rechercher un article...">
+            <div class="category-filters" id="categoryFilters">
+                {category_filters}
             </div>
         </section>
 
-        <section class="search-filter-section">
-            <div class="container">
-                <div class="search-bar">
-                    <input type="text" 
-                           id="searchInput" 
-                           class="search-input" 
-                           placeholder="🔍 Rechercher un article...">
-                </div>
-                <div class="category-filters" id="categoryFilters">
-                    <button class="filter-btn active" data-category="all">Tous</button>
-                    {category_filters}
-                </div>
+        <section id="articles">
+            <div class="articles-grid" id="articlesGrid">
+                {articles_html}
             </div>
-        </section>
-
-        <section class="articles-section">
-            <div class="container">
-                {featured_html}
-
-                <h2 class="section-title" id="articles">Articles récents</h2>
-                
-                <div class="articles-grid" id="articlesGrid">
-                    {articles_html}
-                </div>
-                <div class="no-results" id="noResults" style="display: none;">
-                    <div class="no-results-icon">🔍</div>
-                    <p>Aucun article trouvé</p>
-                </div>
+            <div class="no-results" id="noResults">
+                <p>Aucun article trouvé.</p>
             </div>
         </section>
     </main>
@@ -2652,371 +2050,127 @@ def generate_index_page(articles):
         </div>
     </footer>
 
-    <!-- Interactive Shell -->
-    <div class="shell-modal" id="shellModal">
-        <div class="shell-content">
-            <div class="shell-header">
-                <span class="shell-title">⚡ CyberInsight Terminal</span>
-                <button class="shell-close" onclick="closeShell()">×</button>
-            </div>
-            <div class="shell-body">
-                <div id="shellOutput" class="shell-output">
-<span style="color: var(--color-primary);">  ______      __              ____           _       __    __ 
- / ____/_  __/ /_  ___  _____/  _/___  _____(_)___ _/ /_  / /_
-/ /   / / / / __ \/ _ \/ ___// // __ \/ ___/ / __ `/ __ \/ __/
-/ /___/ /_/ / /_/ /  __/ /  _/ // / / (__  ) / /_/ / / / / /_  
-\____/\__, /_.___/\___/_/  /___/_/ /_/____/_/\__, /_/ /_/\__/  
-     /____/                                  /____/             
-</span>
-<span style="color: var(--color-secondary);">═══════════════════════════════════════════════════════════</span>
-
-Bienvenue sur CyberInsight Terminal v1.0
-Tapez <span style="color: var(--color-primary);">help</span> pour voir les commandes disponibles
-
-<span style="color: var(--color-text-muted);">root@cyberinsight:~#</span> </div>
-                <div class="shell-input-line">
-                    <span class="shell-prompt">root@cyberinsight:~#</span>
-                    <input type="text" id="shellInput" class="shell-input" autofocus autocomplete="off" spellcheck="false">
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
         document.addEventListener('DOMContentLoaded', function() {{
             // Theme Toggle
-            (function() {{
             const themeToggle = document.getElementById('themeToggle');
             const themeIcon = document.getElementById('themeIcon');
             const html = document.documentElement;
 
-            if (!themeToggle || !themeIcon) return;
+            if (themeToggle && themeIcon) {{
+                const savedTheme = localStorage.getItem('theme') || 'dark';
+                html.setAttribute('data-theme', savedTheme);
+                themeIcon.textContent = savedTheme === 'dark' ? '🌙' : '☀️';
 
-            const savedTheme = localStorage.getItem('theme') || 'dark';
-            html.setAttribute('data-theme', savedTheme);
-            themeIcon.textContent = savedTheme === 'dark' ? '🌙' : '☀️';
+                themeToggle.addEventListener('click', function() {{
+                    const currentTheme = html.getAttribute('data-theme');
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    html.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                    themeIcon.textContent = newTheme === 'dark' ? '🌙' : '☀️';
+                }});
+            }}
 
-            themeToggle.addEventListener('click', () => {{
-                const currentTheme = html.getAttribute('data-theme');
-                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                html.setAttribute('data-theme', newTheme);
-                localStorage.setItem('theme', newTheme);
-                themeIcon.textContent = newTheme === 'dark' ? '🌙' : '☀️';
-            }});
-        }})();
+            // Search
+            const searchInput = document.getElementById('searchInput');
+            const articlesGrid = document.getElementById('articlesGrid');
+            const noResults = document.getElementById('noResults');
 
-        const searchInput = document.getElementById('searchInput');
-        const articlesGrid = document.getElementById('articlesGrid');
-        const noResults = document.getElementById('noResults');
-        const articleCards = articlesGrid.querySelectorAll('.article-card');
+            if (searchInput && articlesGrid) {{
+                const articleCards = articlesGrid.querySelectorAll('.article-card');
 
-        searchInput.addEventListener('input', function() {{
-            const searchTerm = this.value.toLowerCase();
-            let visibleCount = 0;
+                searchInput.addEventListener('input', function() {{
+                    const searchTerm = this.value.toLowerCase();
+                    let visibleCount = 0;
 
-            articleCards.forEach(card => {{
-                const title = card.querySelector('h3').textContent.toLowerCase();
-                const excerpt = card.querySelector('.article-excerpt').textContent.toLowerCase();
-                const category = card.querySelector('.article-category').textContent.toLowerCase();
+                    articleCards.forEach(function(card) {{
+                        const title = card.querySelector('h3').textContent.toLowerCase();
+                        const excerpt = card.querySelector('.article-excerpt').textContent.toLowerCase();
+                        const category = card.querySelector('.article-category').textContent.toLowerCase();
+                        
+                        if (title.includes(searchTerm) || excerpt.includes(searchTerm) || category.includes(searchTerm)) {{
+                            card.classList.remove('hidden');
+                            visibleCount++;
+                        }} else {{
+                            card.classList.add('hidden');
+                        }}
+                    }});
+
+                    if (noResults) {{
+                        noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+                    }}
+                }});
+            }}
+
+            // Category Filters
+            const filterButtons = document.querySelectorAll('.filter-btn');
+
+            if (filterButtons.length > 0 && articlesGrid) {{
+                const articleCards = articlesGrid.querySelectorAll('.article-card');
                 
-                const matches = title.includes(searchTerm) || 
-                               excerpt.includes(searchTerm) || 
-                               category.includes(searchTerm);
+                filterButtons.forEach(function(button) {{
+                    button.addEventListener('click', function() {{
+                        filterButtons.forEach(function(btn) {{
+                            btn.classList.remove('active');
+                        }});
+                        this.classList.add('active');
 
-                if (matches) {{
-                    card.classList.remove('hidden');
-                    visibleCount++;
-                }} else {{
-                    card.classList.add('hidden');
-                }}
-            }});
+                        const category = this.getAttribute('data-category');
+                        let visibleCount = 0;
 
-            noResults.style.display = visibleCount === 0 ? 'block' : 'none';
-        }});
+                        articleCards.forEach(function(card) {{
+                            const cardCategory = card.querySelector('.article-category').textContent;
+                            
+                            if (category === 'all' || cardCategory === category) {{
+                                card.classList.remove('hidden');
+                                visibleCount++;
+                            }} else {{
+                                card.classList.add('hidden');
+                            }}
+                        }});
 
-        const filterButtons = document.querySelectorAll('.filter-btn');
+                        if (searchInput) {{
+                            searchInput.value = '';
+                        }}
+                        if (noResults) {{
+                            noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+                        }}
+                    }});
+                }});
+            }}
 
-        filterButtons.forEach(button => {{
-            button.addEventListener('click', function() {{
-                filterButtons.forEach(btn => btn.classList.remove('active'));
-                this.classList.add('active');
+            // Back to Top
+            const backToTop = document.getElementById('backToTop');
 
-                const category = this.getAttribute('data-category');
-                let visibleCount = 0;
-
-                articleCards.forEach(card => {{
-                    const cardCategory = card.querySelector('.article-category').textContent;
-                    
-                    if (category === 'all' || cardCategory === category) {{
-                        card.classList.remove('hidden');
-                        visibleCount++;
+            if (backToTop) {{
+                window.addEventListener('scroll', function() {{
+                    if (window.pageYOffset > 300) {{
+                        backToTop.classList.add('visible');
                     }} else {{
-                        card.classList.add('hidden');
+                        backToTop.classList.remove('visible');
                     }}
                 }});
 
-                searchInput.value = '';
-                noResults.style.display = visibleCount === 0 ? 'block' : 'none';
-            }});
-        }});
-
-        const backToTop = document.getElementById('backToTop');
-
-        window.addEventListener('scroll', () => {{
-            if (window.pageYOffset > 300) {{
-                backToTop.classList.add('visible');
-            }} else {{
-                backToTop.classList.remove('visible');
+                backToTop.addEventListener('click', function() {{
+                    window.scrollTo({{
+                        top: 0,
+                        behavior: 'smooth'
+                    }});
+                }});
             }}
         }});
-
-        backToTop.addEventListener('click', () => {{
-            window.scrollTo({{
-                top: 0,
-                behavior: 'smooth'
-            }});
-        }});
-
-        // Interactive Shell
-        (function() {{
-            const shellBtn = document.getElementById('shellBtn');
-            const shellModal = document.getElementById('shellModal');
-            const shellInput = document.getElementById('shellInput');
-            const shellOutput = document.getElementById('shellOutput');
-            
-            if (!shellBtn || !shellModal || !shellInput || !shellOutput) return;
-            
-            let commandHistory = [];
-            let historyIndex = -1;
-
-        const commands = {{
-            help: {{
-                description: 'Affiche cette aide',
-                execute: () => `
-<span style="color: var(--color-primary);">Commandes disponibles:</span>
-
-  <span style="color: var(--color-secondary);">about</span>       Informations sur CyberInsight
-  <span style="color: var(--color-secondary);">articles</span>    Liste tous les articles
-  <span style="color: var(--color-secondary);">whoami</span>      Informations sur l'auteur
-  <span style="color: var(--color-secondary);">skills</span>      Compétences techniques
-  <span style="color: var(--color-secondary);">social</span>      Liens sociaux
-  <span style="color: var(--color-secondary);">cat</span> [file]  Affiche le contenu d'un fichier
-  <span style="color: var(--color-secondary);">ls</span>          Liste les fichiers disponibles
-  <span style="color: var(--color-secondary);">clear</span>       Efface le terminal
-  <span style="color: var(--color-secondary);">exit</span>        Ferme le terminal
-  <span style="color: var(--color-secondary);">help</span>        Affiche cette aide
-
-<span style="color: var(--color-text-muted);">Astuce: Utilisez les flèches ↑↓ pour naviguer dans l'historique</span>
-`
-            }},
-            about: {{
-                description: 'Informations sur le blog',
-                execute: () => `
-<span style="color: var(--color-primary);">╔═══════════════════════════════════════════════════════╗</span>
-<span style="color: var(--color-primary);">║</span>              <span style="color: var(--color-secondary);">CYBERINSIGHT</span>                        <span style="color: var(--color-primary);">║</span>
-<span style="color: var(--color-primary);">╚═══════════════════════════════════════════════════════╝</span>
-
-<span style="color: var(--color-secondary);">Description:</span>
-  Blog de cybersécurité en français
-  Focus: Pentest, CTF, OSINT, Red Team
-
-<span style="color: var(--color-secondary);">Thématiques:</span>
-  → Web Security & API Hacking
-  → Network Penetration Testing
-  → OSINT & Reconnaissance
-  → Forensic & Incident Response
-  → DevSecOps & CI/CD Security
-
-<span style="color: var(--color-secondary);">Fonctionnalités:</span>
-  ✓ Articles techniques détaillés
-  ✓ Code playground interactif
-  ✓ Séries de tutoriels
-  ✓ Commentaires GitHub
-  ✓ Terminal interactif (vous êtes ici!)
-
-<span style="color: var(--color-text-muted);">Tapez 'articles' pour voir le contenu disponible</span>
-`
-            }},
-            whoami: {{
-                description: 'À propos de l\'auteur',
-                execute: () => `
-<span style="color: var(--color-primary);">root@cyberinsight</span>
-
-<span style="color: var(--color-secondary);">Rôle:</span> Security Researcher & Bug Hunter
-<span style="color: var(--color-secondary);">Focus:</span> Web Security, OSINT, Red Team Operations
-
-<span style="color: var(--color-secondary);">Certifications:</span>
-  → OSCP (Offensive Security Certified Professional)
-  → CEH (Certified Ethical Hacker)
-  → eWPT (eLearnSecurity Web Pentester)
-
-<span style="color: var(--color-secondary);">GitHub:</span> <span style="color: var(--color-accent);">https://github.com/voidsponge</span>
-
-<span style="color: var(--color-text-muted);">Tapez 'social' pour plus de liens</span>
-`
-            }},
-            skills: {{
-                description: 'Compétences techniques',
-                execute: () => `
-<span style="color: var(--color-primary);">╔══════════════════════════════════════════════════════╗</span>
-<span style="color: var(--color-primary);">║</span>              <span style="color: var(--color-secondary);">STACK TECHNIQUE</span>                       <span style="color: var(--color-primary);">║</span>
-<span style="color: var(--color-primary);">╚══════════════════════════════════════════════════════╝</span>
-
-<span style="color: var(--color-secondary);">Pentest & Exploitation:</span>
-  [████████████████████] 95% Burp Suite, OWASP ZAP
-  [██████████████████  ] 90% Metasploit, Cobalt Strike
-  [███████████████     ] 85% SQLMap, XSStrike
-  [████████████████    ] 88% Nmap, Masscan, Nuclei
-
-<span style="color: var(--color-secondary);">Programming:</span>
-  [████████████████████] 95% Python
-  [██████████████      ] 80% Bash/Shell
-  [███████████████     ] 75% JavaScript
-  [█████████████       ] 70% Go
-
-<span style="color: var(--color-secondary);">OSINT & Recon:</span>
-  [████████████████████] 98% Shodan, Censys
-  [████████████████    ] 88% theHarvester, Recon-ng
-  [███████████████████ ] 92% Subfinder, Amass
-
-<span style="color: var(--color-text-muted);">Tapez 'articles' pour voir les tutoriels associés</span>
-`
-            }},
-            social: {{
-                description: 'Liens sociaux et contact',
-                execute: () => `
-<span style="color: var(--color-primary);">═══════════════════════════════════════</span>
-<span style="color: var(--color-secondary);">         LIENS & CONTACT</span>
-<span style="color: var(--color-primary);">═══════════════════════════════════════</span>
-
-<span style="color: var(--color-accent);">→</span> GitHub:    <span style="color: var(--color-secondary);">https://github.com/voidsponge</span>
-<span style="color: var(--color-accent);">→</span> Twitter:   <span style="color: var(--color-secondary);">@voidsponge</span>
-<span style="color: var(--color-accent);">→</span> LinkedIn:  <span style="color: var(--color-secondary);">/in/voidsponge</span>
-<span style="color: var(--color-accent);">→</span> HackerOne: <span style="color: var(--color-secondary);">@voidsponge</span>
-
-<span style="color: var(--color-text-muted);">N'hésitez pas à me contacter pour collaborations !</span>
-`
-            }},
-            articles: {{
-                description: 'Liste des articles',
-                execute: () => `
-<span style="color: var(--color-primary);">Articles disponibles:</span>
-
-  01. <span style="color: var(--color-secondary);">[Web Security]</span> Exploitation SSRF sur AWS (2025)
-      <span style="color: var(--color-text-muted);">└─ Techniques avancées, bypass filters, IMDSv2</span>
-
-  02. <span style="color: var(--color-secondary);">[Phishing]</span> Analyse campagne sophistiquée (2025)
-      <span style="color: var(--color-text-muted);">└─ Evilginx2, AiTM attacks, IoC analysis</span>
-
-<span style="color: var(--color-accent);">→</span> Plus d'articles à venir! Tapez 'exit' et explorez le blog.
-`
-            }},
-            ls: {{
-                description: 'Liste les fichiers',
-                execute: () => `
-<span style="color: var(--color-secondary);">drwxr-xr-x</span> 2 root root 4096 Dec  2 2025 <span style="color: var(--color-primary);">articles/</span>
-<span style="color: var(--color-secondary);">-rw-r--r--</span> 1 root root 2048 Dec  2 2025 about.txt
-<span style="color: var(--color-secondary);">-rw-r--r--</span> 1 root root 1024 Dec  2 2025 whoami.txt
-<span style="color: var(--color-secondary);">-rw-r--r--</span> 1 root root  512 Dec  2 2025 skills.txt
-
-<span style="color: var(--color-text-muted);">Utilisez 'cat [fichier]' pour lire le contenu</span>
-`
-            }},
-            cat: {{
-                description: 'Affiche le contenu d\'un fichier',
-                execute: (args) => {{
-                    if (!args[0]) {{
-                        return '<span style="color: var(--color-accent);">Erreur:</span> Spécifiez un fichier. Exemple: cat about.txt';
-                    }}
-                    const file = args[0].replace('.txt', '');
-                    if (commands[file]) {{
-                        return commands[file].execute();
-                    }}
-                    return `<span style="color: var(--color-accent);">cat:</span> ${{args[0]}}: No such file or directory`;
-                }}
-            }},
-            clear: {{
-                description: 'Efface le terminal',
-                execute: () => {{
-                    shellOutput.innerHTML = '<span style="color: var(--color-text-muted);">root@cyberinsight:~#</span> ';
-                    return '';
-                }}
-            }},
-            exit: {{
-                description: 'Ferme le terminal',
-                execute: () => {{
-                    closeShell();
-                    return '';
-                }}
-            }}
-        }};
-
-        if (shellBtn) {{
-            shellBtn.addEventListener('click', () => {{
-                shellModal.classList.add('active');
-                setTimeout(() => shellInput.focus(), 100);
-            }});
-        }}
-
-        window.closeShell = function() {{
-            shellModal.classList.remove('active');
-        }}
-
-        shellInput.addEventListener('keydown', (e) => {{
-            if (e.key === 'Enter') {{
-                const command = shellInput.value.trim();
-                if (command) {{
-                    commandHistory.push(command);
-                    historyIndex = commandHistory.length;
-                    executeCommand(command);
-                    shellInput.value = '';
-                }}
-            }} else if (e.key === 'ArrowUp') {{
-                e.preventDefault();
-                if (historyIndex > 0) {{
-                    historyIndex--;
-                    shellInput.value = commandHistory[historyIndex];
-                }}
-            }} else if (e.key === 'ArrowDown') {{
-                e.preventDefault();
-                if (historyIndex < commandHistory.length - 1) {{
-                    historyIndex++;
-                    shellInput.value = commandHistory[historyIndex];
-                }} else {{
-                    historyIndex = commandHistory.length;
-                    shellInput.value = '';
-                }}
-            }}
-        }});
-
-        window.executeCommand = function(input) {{
-            const [cmd, ...args] = input.split(' ');
-            
-            shellOutput.innerHTML += `<span style="color: var(--color-primary);">root@cyberinsight:~#</span> ${{input}}\n`;
-            
-            if (commands[cmd]) {{
-                const output = commands[cmd].execute(args);
-                if (output) {{
-                    shellOutput.innerHTML += output + '\n';
-                }}
-            }} else {{
-                shellOutput.innerHTML += `<span style="color: var(--color-accent);">bash:</span> ${{cmd}}: command not found\n<span style="color: var(--color-text-muted);">Tapez 'help' pour voir les commandes disponibles</span>\n`;
-            }}
-            
-            shellOutput.innerHTML += '\n';
-            shellOutput.scrollTop = shellOutput.scrollHeight;
-        }}
-
-        shellModal.addEventListener('click', (e) => {{
-            if (e.target === shellModal) {{
-                closeShell();
-            }}
-        }});
-        
-        }})(); // End Shell IIFE
     </script>
 </body>
-</html>'''
+</html>"""
+    
+    html = html_template.format(
+        total_articles=total_articles,
+        total_categories=len(all_categories),
+        total_reading_time=total_reading_time,
+        featured_html=featured_html,
+        category_filters=category_filters,
+        articles_html=articles_html
+    )
     
     return html
 
