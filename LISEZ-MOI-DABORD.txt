@@ -1,0 +1,103 @@
+# 🎉 Votre Blog de Cybersécurité est Prêt !
+
+## 📦 Ce que vous avez
+
+Vous avez maintenant tous les fichiers nécessaires pour créer un blog GitHub Pages professionnel et automatisé :
+
+### Fichiers principaux
+- ✅ `.github/workflows/build.yml` - Automatisation GitHub Actions
+- ✅ `_articles/` - Dossier pour vos articles (2 exemples inclus)
+- ✅ `generate.py` - Script qui génère le site
+- ✅ `README.md` - Documentation complète
+- ✅ `.gitignore` - Configuration Git
+- ✅ `preview.html` - Aperçu du design
+
+### Articles d'exemple inclus
+- 📝 Phishing sophistiqué (phishing-campagne-2025.md)
+- 📝 Vulnérabilités SSRF (ssrf-exploitation-2025.md)
+- 📝 Template vierge (_template.md)
+
+## 🚀 Comment commencer ?
+
+### LISEZ EN PREMIER : GUIDE-DEMARRAGE.md
+Ce fichier contient toutes les instructions étape par étape pour :
+1. Créer votre repo GitHub
+2. Uploader les fichiers
+3. Activer GitHub Pages
+4. Publier votre premier article
+
+### Ordre des étapes :
+
+1. **Lisez GUIDE-DEMARRAGE.md** (5 min)
+2. **Créez votre repo GitHub** nommé `votre-nom.github.io`
+3. **Uploadez tous ces fichiers** sur le repo
+4. **Activez GitHub Pages** (Settings > Pages > GitHub Actions)
+5. **Attendez 2 minutes** que le site se génère
+6. **Visitez votre site** à https://votre-nom.github.io
+
+## 📝 Ajouter un article = 3 étapes
+
+1. Créez un fichier `.md` dans `_articles/`
+2. Copiez le format du template
+3. Commit → Le blog se met à jour automatiquement !
+
+## 🎨 Prévisualiser le design
+
+Ouvrez le fichier `preview.html` dans votre navigateur pour voir à quoi ressemble le blog.
+
+## 📚 Documentation complète
+
+Le fichier `README.md` contient :
+- Toutes les fonctionnalités
+- Comment personnaliser les couleurs
+- Comment ajouter des articles
+- Dépannage des problèmes courants
+- Structure complète du projet
+
+## 💡 Système entièrement automatisé
+
+Voici comment ça marche :
+
+```
+Vous écrivez        Vous faites        GitHub Actions        Votre site
+un article .md  →   git push      →    génère le HTML    →   se met à jour
+  (_articles/)                         (automatique)         (2 minutes)
+```
+
+**Zéro configuration nécessaire** après le setup initial !
+
+## ✨ Fonctionnalités
+
+- 🎨 Design cyber moderne (thème sombre, néons)
+- 📱 Responsive (mobile-friendly)
+- 🚀 Super rapide (site statique)
+- 🔄 Mise à jour automatique à chaque commit
+- 💻 Coloration syntaxique pour le code
+- 📊 Tableaux, listes, citations
+- 🏷️ Système de catégories
+- ⭐ Article en vedette automatique
+
+## 🎯 Prochaines étapes
+
+1. **Setup initial** (suivez GUIDE-DEMARRAGE.md)
+2. **Personnalisez** le titre et les couleurs
+3. **Écrivez** vos propres articles
+4. **Partagez** votre blog !
+
+## 🆘 Besoin d'aide ?
+
+- **Guide détaillé** : GUIDE-DEMARRAGE.md
+- **Documentation** : README.md
+- **Template d'article** : _articles/_template.md
+
+## 🔗 Ressources utiles
+
+- [Markdown Guide](https://www.markdownguide.org/)
+- [GitHub Pages Doc](https://docs.github.com/en/pages)
+- [Exemples d'articles inclus](_articles/)
+
+---
+
+**Bon courage et amusez-vous bien avec votre nouveau blog ! 🚀**
+
+Si vous avez des questions, consultez le README.md ou le GUIDE-DEMARRAGE.md.
