@@ -6,6 +6,7 @@ Lit tous les articles markdown du dossier _articles/ et génère le site dans _s
 
 import os
 import re
+import json
 import markdown
 from pathlib import Path
 from datetime import datetime
@@ -377,11 +378,19 @@ def generate_index_page(articles):
     # Article en vedette (le plus récent)
     featured = articles_sorted[0] if articles_sorted else None
     
+    # Extraire les catégories uniques
+    categories = sorted(set(article['category'] for article in articles_sorted))
+    
+    # Générer les boutons de filtre de catégories
+    category_filters = ''
+    for category in categories:
+        category_filters += f'<button class="filter-btn" data-category="{category}">{category}</button>\n                    '
+    
     # Générer les cartes d'articles
     articles_html = ''
     for article in articles_sorted:
         articles_html += f'''
-        <article class="article-card">
+        <article class="article-card" data-category="{article['category']}">
             <div class="article-meta">
                 <span class="article-category">{article['category']}</span>
                 <span>•</span>
@@ -539,6 +548,93 @@ def generate_index_page(articles):
 
         nav a:hover::after {{
             width: 100%;
+        }}
+
+        /* Search and Filter Section */
+        .search-filter-section {{
+            padding: 2rem 0;
+            border-bottom: 1px solid var(--color-border);
+            animation: fadeInUp 0.8s ease-out 0.3s both;
+        }}
+
+        .search-bar {{
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            align-items: center;
+        }}
+
+        .search-input {{
+            flex: 1;
+            padding: 1rem 1.5rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            color: var(--color-text);
+            font-family: var(--font-body);
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }}
+
+        .search-input:focus {{
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(0, 245, 160, 0.1);
+        }}
+
+        .search-input::placeholder {{
+            color: var(--color-text-muted);
+        }}
+
+        .category-filters {{
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }}
+
+        .filter-btn {{
+            padding: 0.6rem 1.2rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            color: var(--color-text-muted);
+            font-family: var(--font-display);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }}
+
+        .filter-btn:hover {{
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+            transform: translateY(-2px);
+        }}
+
+        .filter-btn.active {{
+            background: var(--color-primary);
+            color: var(--color-bg);
+            border-color: var(--color-primary);
+            box-shadow: var(--shadow-glow);
+        }}
+
+        .no-results {{
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--color-text-muted);
+            font-size: 1.2rem;
+        }}
+
+        .no-results-icon {{
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }}
+
+        .article-card.hidden {{
+            display: none;
         }}
 
         .hero {{
@@ -774,6 +870,8 @@ def generate_index_page(articles):
             .articles-grid {{ grid-template-columns: 1fr; }}
             .featured-article {{ padding: 2rem; }}
             .featured-article h2 {{ font-size: 1.8rem; }}
+            .search-filter-section {{ padding: 1.5rem 0; }}
+            .category-filters {{ gap: 0.5rem; }}
         }}
     </style>
 </head>
@@ -806,14 +904,33 @@ def generate_index_page(articles):
             </div>
         </section>
 
+        <section class="search-filter-section">
+            <div class="container">
+                <div class="search-bar">
+                    <input type="text" 
+                           id="searchInput" 
+                           class="search-input" 
+                           placeholder="🔍 Rechercher un article...">
+                </div>
+                <div class="category-filters" id="categoryFilters">
+                    <button class="filter-btn active" data-category="all">Tous</button>
+                    {category_filters}
+                </div>
+            </div>
+        </section>
+
         <section class="articles-section">
             <div class="container">
                 {featured_html}
 
                 <h2 class="section-title" id="articles">Articles récents</h2>
                 
-                <div class="articles-grid">
+                <div class="articles-grid" id="articlesGrid">
                     {articles_html}
+                </div>
+                <div class="no-results" id="noResults" style="display: none;">
+                    <div class="no-results-icon">🔍</div>
+                    <p>Aucun article trouvé</p>
                 </div>
             </div>
         </section>
@@ -824,6 +941,68 @@ def generate_index_page(articles):
             <p>&copy; 2025 CyberInsight. Tous droits réservés.</p>
         </div>
     </footer>
+
+    <script>
+        // Recherche
+        const searchInput = document.getElementById('searchInput');
+        const articlesGrid = document.getElementById('articlesGrid');
+        const noResults = document.getElementById('noResults');
+        const articleCards = articlesGrid.querySelectorAll('.article-card');
+
+        searchInput.addEventListener('input', function() {{
+            const searchTerm = this.value.toLowerCase();
+            let visibleCount = 0;
+
+            articleCards.forEach(card => {{
+                const title = card.querySelector('h3').textContent.toLowerCase();
+                const excerpt = card.querySelector('.article-excerpt').textContent.toLowerCase();
+                const category = card.querySelector('.article-category').textContent.toLowerCase();
+                
+                const matches = title.includes(searchTerm) || 
+                               excerpt.includes(searchTerm) || 
+                               category.includes(searchTerm);
+
+                if (matches) {{
+                    card.classList.remove('hidden');
+                    visibleCount++;
+                }} else {{
+                    card.classList.add('hidden');
+                }}
+            }});
+
+            noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+        }});
+
+        // Filtrage par catégorie
+        const filterButtons = document.querySelectorAll('.filter-btn');
+
+        filterButtons.forEach(button => {{
+            button.addEventListener('click', function() {{
+                // Retirer la classe active de tous les boutons
+                filterButtons.forEach(btn => btn.classList.remove('active'));
+                // Ajouter la classe active au bouton cliqué
+                this.classList.add('active');
+
+                const category = this.getAttribute('data-category');
+                let visibleCount = 0;
+
+                articleCards.forEach(card => {{
+                    const cardCategory = card.querySelector('.article-category').textContent;
+                    
+                    if (category === 'all' || cardCategory === category) {{
+                        card.classList.remove('hidden');
+                        visibleCount++;
+                    }} else {{
+                        card.classList.add('hidden');
+                    }}
+                }});
+
+                // Réinitialiser la recherche
+                searchInput.value = '';
+                noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+            }});
+        }});
+    </script>
 </body>
 </html>'''
     
